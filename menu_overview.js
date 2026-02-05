@@ -3,8 +3,8 @@ const menuOverviewData = {
     "Monday": {
       "Appetizer 1": "Hot Appetizer: Crispy Prosciutto-Wrapped Mozzarella, spicy tomato fondue (GF)",
       "Appetizer 2": "Cold Appetizer: Chefs Green Salad with Roasted Pepper and Blue Cheese ( Choice Dressing ) (GF)",
-      "Elevated": "Poached Haddock Filet, Herb sauce (GF)",
-      "Traditional": "Coffee-Rubbed Beef Tenderloin, shallot butter (GF)",
+      "Elevated": "Coffee-Rubbed Beef Tenderloin, shallot butter (GF)",
+      "Traditional": "Poached Haddock Filet, Herb sauce (GF)",
       "Alternative": "WILD MUSHROOM & LEEK GALETTE (V)",
       "Veg 1": "Charred Green Beans, lemon gremolata",
       "Veg 2": "Honey-Glazed Baby Carrots",
@@ -16,8 +16,9 @@ const menuOverviewData = {
       "Appetizer 2": "Cold Appetizer: Chefs Salad with Walnuts and Sauteed Apple ( Choice Dressing ) (GF/DF)",
       "Elevated": "Thai Coconut Beef with Glass Noodles (GF/DF)",
       "Traditional": "Herb-Crusted Chicken Breast, Tuscan Italian sauce",
-      "Veg 1": null,
-      "Veg 2": "Sautéed Swiss Chard, garlic confit (whole roasted cloves)\\nRoasted Cauliflower with Rockafeller Style Bread Crumbs (Bacon/Thyme/Butter)",
+      "Alternative": "N/A",
+      "Veg 1": "Sautéed Swiss Chard, garlic confit (whole roasted cloves)",
+      "Veg 2": "Roasted Cauliflower with Rockafeller Style Bread Crumbs (Bacon/Thyme/Butter)",
       "Starch": "Whipped Yukon Gold Potatoes",
       "Dessert": "Orange Blossom Crème Caramel with Cinnamon Whipped Topping"
     },
