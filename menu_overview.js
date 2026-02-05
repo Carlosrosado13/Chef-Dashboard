@@ -5,8 +5,9 @@ const menuOverviewData = {
       "Appetizer 2": "Cold Appetizer: Chefs Green Salad with Roasted Pepper and Blue Cheese ( Choice Dressing ) (GF)",
       "Elevated": "Poached Haddock Filet, Herb sauce (GF)",
       "Traditional": "Coffee-Rubbed Beef Tenderloin, shallot butter (GF)",
-      "Veg 1": "Wild Mushroom & Leek Galette (V)",
-      "Veg 2": "Charred Green Beans, lemon gremolata\\nHoney-Glazed Baby Carrots",
+      "Alternative": "WILD MUSHROOM & LEEK GALETTE (V)",
+      "Veg 1": "Charred Green Beans, lemon gremolata",
+      "Veg 2": "Honey-Glazed Baby Carrots",
       "Starch": "Grilled Parmesan Polenta",
       "Dessert": "Bittersweet Chocolate Budino (Italian Chocolate Pudding) with Candied Pecans and Cinnamon Whipped Topping (GF)"
     },
