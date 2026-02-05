@@ -1,0 +1,148 @@
+/* Base styles */
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 20px;
+  background: #f8f8f8;
+  color: #333;
+}
+
+header h1 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #0f3f50;
+}
+
+/* Top navigation tabs */
+.top-tabs {
+  display: flex;
+  border-bottom: 2px solid #0f3f50;
+  background: #1e5f74;
+}
+
+.tab-button {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  background: transparent;
+  color: #ffffff;
+  font-weight: bold;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tab-button.active {
+  background: #0f3f50;
+}
+
+/* Controls for week/day selection and search */
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 15px 0;
+  flex-wrap: wrap;
+}
+
+.controls label {
+  font-weight: bold;
+}
+
+#searchLabel {
+  /* Hidden by default; will be toggled via script */
+}
+
+/* Menu row for categories and dishes */
+.menu-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.menu-item-block {
+  flex: 1 1 calc(100% / 9 - 10px);
+  min-width: 140px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fafafa;
+  padding: 8px;
+  cursor: pointer; /* make clickable */
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.category-label {
+  font-weight: bold;
+  margin-bottom: 4px;
+  color: #0f3f50;
+}
+
+.dish-name {
+  font-size: 0.9rem;
+  white-space: pre-line;
+}
+
+/* Highlight for selected menu item */
+.menu-item-block.selected {
+  border-color: #0f3f50;
+  background-color: #eef5f7;
+}
+
+/* Styles for the recipe details section */
+.recipe-details {
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #333;
+  margin-top: 10px;
+  overflow-x: auto;
+  font-size: 0.9rem;
+}
+
+.recipe-details h2 {
+  margin-top: 0;
+  color: #0f3f50;
+}
+
+.recipe-details h3 {
+  color: #1e5f74;
+  margin-top: 15px;
+}
+
+/* Tab content visibility */
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* Ingredients list styles */
+#ingredientsContainer section {
+  margin-bottom: 20px;
+}
+
+#ingredientsContainer h3 {
+  margin-bottom: 5px;
+  color: #1e5f74;
+}
+
+#ingredientsContainer ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+#ingredientsContainer li {
+  margin-bottom: 4px;
+}
+
+.no-results {
+  background: #fff3cd;
+  padding: 10px;
+  border: 1px solid #ffeeba;
+  border-radius: 4px;
+  color: #856404;
+}

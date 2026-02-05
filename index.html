@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chef Dashboard</title>
+  <!-- Main stylesheet -->
+  <link rel="stylesheet" href="style.css" />
+  <!-- Data files containing ingredient and menu information -->
+  <script src="data.js"></script>
+  <!-- Append placeholder categories for Weeks 3 and 4 -->
+  <script src="data_add.js"></script>
+  <script src="menu_overview.js"></script>
+  <!-- Recipe details for all dishes -->
+  <script src="recipes.js"></script>
+  <!-- Additional recipe details for Weeks 3 and 4 -->
+  <script src="recipes_add.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Weekly Menu Ingredient Planner</h1>
+  </header>
+
+  <!-- Top navigation tabs -->
+  <nav class="top-tabs">
+    <button id="recipeTab" class="tab-button active">Recipe Search</button>
+    <button id="ingredientTab" class="tab-button">Ingredients Checker</button>
+  </nav>
+
+  <!-- Controls for selecting week/day and searching -->
+  <section class="controls">
+    <label for="weekSelect">Week:</label>
+    <select id="weekSelect"></select>
+
+    <label for="daySelect">Day:</label>
+    <select id="daySelect"></select>
+
+    <label id="searchLabel" for="searchInput">Search:</label>
+    <input type="text" id="searchInput" placeholder="Filter ingredients..." />
+  </section>
+
+  <!-- Recipes view: shows menu categories and dishes -->
+  <section id="recipesView" class="tab-content active">
+    <div id="menuRow" class="menu-row"></div>
+    <!-- Container for displaying detailed recipe of selected dish -->
+    <div id="recipeDetails" class="recipe-details"></div>
+  </section>
+
+  <!-- Ingredients view: shows grouped ingredient lists -->
+  <section id="ingredientsView" class="tab-content">
+    <div id="ingredientsContainer"></div>
+  </section>
+
+  <!-- Main script -->
+  <script src="script.js"></script>
+</body>
+</html>
