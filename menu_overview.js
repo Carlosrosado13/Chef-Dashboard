@@ -27,7 +27,7 @@ const menuOverviewData = {
       "Appetizer 2": "Cold Appetizer: Baby Spinach, Sundried Tomato, and Mandarin Salad with Poppy Seed Dressing (GF/DF)",
       "Elevated": "Seared Hanger Steak, bordelaise (GF/DF)",
       "Traditional": "Miso-Marinated Seabass Filets (CHEFS FISH) (GF/DF)",
-      "Alternative": "Ricotta & Spinach Stuffed Manicotti (V)"
+      "Alternative": "Ricotta & Spinach Stuffed Manicotti (V)",
       "Veg 1": "Sesame Steamed Broccolini",
       "Veg 2": "Maple Roasted Squash",
       "Starch": "Ginger Jasmine Rice",
