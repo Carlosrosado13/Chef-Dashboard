@@ -122,7 +122,7 @@ function populateWeeks() {
   for (const week in menuOverviewData) {
     const option = document.createElement('option');
     option.value = week;
-    option.textContent = `Week ${week}`;
+    option.textContent = 'week'+week;
     weekSelect.appendChild(option);
   }
 }
