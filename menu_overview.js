@@ -234,8 +234,9 @@ const menuOverviewData = {
       "Appetizer 2": "Cold Appetizer: Leek and Potato Soup",
       "Elevated": "Grilled Cape Hake, olive vinaigrette (GF/DF)",
       "Traditional": "Chicken Fricassée (Boneless Thigh), tarragon cream (GF)",
-      "Veg 1": "Ricotta Gnocchi, roasted garlic (V)",
-      "Veg 2": "Sautéed Green Beans\\nGlazed Yellow Beets",
+      "Alternative":"Ricotta Gnocchi, Roasted Garlic (V)",
+      "Veg 1": "Sautéed Green Beans",
+      "Veg 2": "Glazed Yellow Beets",
       "Starch": "Creamy Herb Polenta",
       "Dessert": "Pistachio Panna Cotta"
     },
