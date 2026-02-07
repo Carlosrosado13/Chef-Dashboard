@@ -246,7 +246,7 @@ const menuOverviewData = {
       "Appetizer 2": "Cold Appetizer: Caesar Salad (Classic – Pre Tossed) (No Crouton – GF)",
       "Elevated": "Beef Bavette, bordelaise (GF/DF)",
       "Traditional": "Chicken Thigh with Crispy Skin and Apple Sausage Hash",
-      "Alternative":"Eggplant & Tomato Gratin (V)"
+      "Alternative":"Eggplant & Tomato Gratin (V)",
       "Veg 1": "Charred Broccoli",
       "Veg 2": "Sautéed Swiss Chard",
       "Starch": "Fully Loaded Baked Potato with Cheddar, Bacon, Chive",
