@@ -224,8 +224,9 @@ const menuOverviewData = {
       "Appetizer 2": "Cold Appetizer: Berries and Feta Salad with Mixed Greens (Choice Dressing)",
       "Elevated": "Salmon Coulibiac with Lemon Sauce",
       "Traditional": "Lemon-Garlic Roasted Chicken (GF/DF)",
-      "Veg 1": null,
-      "Veg 2": "Creamed Spinach\\nRoasted Root Medley",
+      "Alternative":"N/A",
+      "Veg 1": "Creamed Spinach",
+      "Veg 2": "Roasted Root Medley",
       "Starch": "Duck Fat Potatoes",
       "Dessert": "Vanilla Bean Cheesecake blueberry compote"
     },
@@ -245,8 +246,9 @@ const menuOverviewData = {
       "Appetizer 2": "Cold Appetizer: Caesar Salad (Classic – Pre Tossed) (No Crouton – GF)",
       "Elevated": "Beef Bavette, bordelaise (GF/DF)",
       "Traditional": "Chicken Thigh with Crispy Skin and Apple Sausage Hash",
-      "Veg 1": "Eggplant & Tomato Gratin (V)",
-      "Veg 2": "Charred Broccoli\\nSautéed Swiss Chard",
+      "Alternative":"Eggplant & Tomato Gratin (V)"
+      "Veg 1": "Charred Broccoli",
+      "Veg 2": "Sautéed Swiss Chard",
       "Starch": "Fully Loaded Baked Potato with Cheddar, Bacon, Chive",
       "Dessert": "Chocolate Espresso Pots de Crème (GF)"
     },
@@ -255,8 +257,9 @@ const menuOverviewData = {
       "Appetizer 2": "Cold Appetizer: Tomato Florentine Soup",
       "Elevated": "Seared Rock Fish, nori wrapped with Miso Sauce (GF/DF)",
       "Traditional": "Chicken Parmigiana",
-      "Veg 1": "Spinach & Chickpea East-Indian Curry (V)",
-      "Veg 2": "Roasted Carrots\\nSteamed Broccoli",
+      "Alternative":"Spinach & Chickpea East-Indian Curry (V)",
+      "Veg 1": "Roasted Carrots",
+      "Veg 2": "Steamed Broccoli",
       "Starch": "Lemon Herb Cous Cous",
       "Dessert": "Citrus Olive Oil Cake (DF)"
     },
@@ -265,8 +268,9 @@ const menuOverviewData = {
       "Appetizer 2": "Cold Appetizer: Olive Tapanade with Crostini",
       "Elevated": "Roasted Pork Loin, mustard jus (GF)",
       "Traditional": "Seared Scallops, brown butter (GF)",
-      "Veg 1": "Wild Mushroom Pot Pie (V)",
-      "Veg 2": "Roasted Leeks\\nHaricots Verts",
+      "Alternative":"Wild Mushroom Pot Pie (V)",
+      "Veg 1": "Roasted Leeks",
+      "Veg 2": "Haricots Verts",
       "Starch": "Steamed Baby Potatoes",
       "Dessert": "Basque Cheesecake"
     },
@@ -275,8 +279,9 @@ const menuOverviewData = {
       "Appetizer 2": "Cold Appetizer: Nicoise Inspired Salad",
       "Elevated": "Grilled Beef Tenderloin, herb butter (GF)",
       "Traditional": "Miso-Glazed Cod (GF/DF)",
-      "Veg 1": "Spinach & Ricotta Stuffed Peppers (V)",
-      "Veg 2": "Steamed Broccoli\\nSteamed Cauliflower",
+      "Alternative":"Spinach & Ricotta Stuffed Peppers (V)",
+      "Veg 1": "Steamed Broccoli",
+      "Veg 2": "Steamed Cauliflower",
       "Starch": "Truffle Pommes Purée",
       "Dessert": "Chocolate Lava Cake"
     },
@@ -285,8 +290,9 @@ const menuOverviewData = {
       "Appetizer 2": "Cold Appetizer: Classic Tomato Bruschetta with Crostini",
       "Elevated": "Braised Porkloin, orange jus (GF)",
       "Traditional": "Grilled Salmon Filet, Herb Cream Sauce (GF)",
-      "Veg 1": "Creamy Mushroom & Leek Pasta (V)",
-      "Veg 2": "Roasted Asparagus\\nSautéed Spinach",
+      "Alternative":"Creamy Mushroom & Leek Pasta (V)",
+      "Veg 1": "Roasted Asparagus",
+      "Veg 2": "Sautéed Spinach",
       "Starch": "Parmesan Rice Pilaf",
       "Dessert": "Strawberry Shortcake"
     }
