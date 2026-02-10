@@ -238,7 +238,7 @@ function renderRecipe() {
     const keyWords = normKey.split(' ').filter(w => w.length > 0);
     const targetWords = target.split(' ').filter(w => w.length > 0);
     if (keyWords.length === 0 || targetWords.length === 0) continue;
-    const common = targetWords.filter(word => keyWords.includes(word));
+    const common = targetWords.filter(word => keyWords.indexOf(word) !== -1);
     const score = common.length / Math.min(keyWords.length, targetWords.length);
     if (score > bestScore) {
       bestScore = score;
@@ -264,7 +264,8 @@ function handleDishClick(elem) {
   }
   selectedDish = dishName;
   // Remove selected class from all blocks
-  document.querySelectorAll('.menu-item-block').forEach(block => {
+  const blocks = document.querySelectorAll('.menu-item-block');
+  Array.prototype.forEach.call(blocks, block => {
     block.classList.remove('selected');
   });
   // Add selected class to clicked block
@@ -343,7 +344,8 @@ function renderMenuRow() {
   });
   // Automatically select the first available dish
   const blocks = document.querySelectorAll('.menu-item-block');
-  for (const block of blocks) {
+  for (let i = 0; i < blocks.length; i += 1) {
+    const block = blocks[i];
     if (block.dataset.dish && block.dataset.dish !== 'Add alternative') {
       handleDishClick(block);
       break;
