@@ -16,6 +16,8 @@ const categoryTitles = [
 // Currently selected dish name (displayed in recipe view)
 let selectedDish = null;
 
+const ingredientCategories = ['produce', 'protein', 'dairy', 'dry', 'other'];
+
 /**
  * Normalize dish names by removing punctuation, parenthetical notes, and converting to lowercase.
  * This helps match menu entries to recipe keys in recipesData.
@@ -36,6 +38,165 @@ function normalizeName(name) {
   // Collapse multiple spaces and trim
   cleaned = cleaned.replace(/\s+/g, ' ').trim();
   return cleaned.toLowerCase();
+}
+
+function stripHtml(value) {
+  if (!value) return '';
+  return value
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parseQuantityAndUnit(value) {
+  const cleaned = stripHtml(value).replace(/,/g, '.');
+  if (!cleaned) return { quantity: null, unit: '' };
+  if (/to taste/i.test(cleaned)) return { quantity: null, unit: 'to taste' };
+
+  const fractionMap = { '½': 0.5, '¼': 0.25, '¾': 0.75, '⅓': 1 / 3, '⅔': 2 / 3, '⅛': 0.125 };
+  const directFraction = cleaned.match(/^([½¼¾⅓⅔⅛])(?:\s+(.*))?$/);
+  if (directFraction) {
+    return {
+      quantity: fractionMap[directFraction[1]],
+      unit: (directFraction[2] || '').trim()
+    };
+  }
+
+  const numericMatch = cleaned.match(/^(\d+(?:\.\d+)?)(?:\s+([\w/%.-]+(?:\s+[\w/%.-]+)*))?$/i);
+  if (numericMatch) {
+    return {
+      quantity: Number(numericMatch[1]),
+      unit: (numericMatch[2] || '').trim()
+    };
+  }
+
+  const mixedFraction = cleaned.match(/^(\d+)\s+([½¼¾⅓⅔⅛])(?:\s+(.*))?$/);
+  if (mixedFraction) {
+    return {
+      quantity: Number(mixedFraction[1]) + fractionMap[mixedFraction[2]],
+      unit: (mixedFraction[3] || '').trim()
+    };
+  }
+
+  return { quantity: null, unit: cleaned };
+}
+
+function parseIngredientsFromRecipeHtml(recipeHtml) {
+  const rows = [];
+  if (!recipeHtml) return rows;
+  const trMatches = recipeHtml.match(/<tr[\s\S]*?<\/tr>/gi) || [];
+  trMatches.forEach(row => {
+    const tdMatches = row.match(/<td[\s\S]*?<\/td>/gi) || [];
+    if (tdMatches.length < 2) return;
+    const ingredientName = stripHtml(tdMatches[0]);
+    if (!ingredientName || /^ingredient$/i.test(ingredientName)) return;
+    const amount = parseQuantityAndUnit(tdMatches[1]);
+    rows.push({ name: ingredientName, quantity: amount.quantity, unit: amount.unit });
+  });
+  return rows;
+}
+
+function buildCategoryLookup() {
+  const lookup = {};
+  if (!menuData || !Array.isArray(menuData.menu)) return lookup;
+  menuData.menu.forEach(entry => {
+    if (!entry || !entry.categories) return;
+    ingredientCategories.forEach(category => {
+      const items = entry.categories[category] || [];
+      items.forEach(item => {
+        const key = normalizeName(item.name);
+        if (key && !lookup[key]) lookup[key] = category;
+      });
+    });
+  });
+  return lookup;
+}
+
+function findRecipeKey(weekRecipes, dishName) {
+  const target = normalizeName(dishName);
+  let bestKey = null;
+  let bestScore = 0;
+  for (const recipeName in weekRecipes) {
+    if (!Object.prototype.hasOwnProperty.call(weekRecipes, recipeName)) continue;
+    const normKey = normalizeName(recipeName);
+    if (normKey === target) return recipeName;
+    const keyWords = normKey.split(' ').filter(Boolean);
+    const targetWords = target.split(' ').filter(Boolean);
+    if (!keyWords.length || !targetWords.length) continue;
+    const common = targetWords.filter(word => keyWords.includes(word));
+    const score = common.length / Math.min(keyWords.length, targetWords.length);
+    if (score > bestScore) {
+      bestScore = score;
+      bestKey = recipeName;
+    }
+  }
+  return bestScore >= 0.4 ? bestKey : null;
+}
+
+function buildIngredientCheckerData() {
+  if (!menuOverviewData || !recipesData) return;
+  const categoryLookup = buildCategoryLookup();
+  const generatedMenu = [];
+
+  Object.keys(menuOverviewData).forEach(weekKey => {
+    const weekNumber = Number(weekKey);
+    const weekDays = menuOverviewData[weekKey];
+    Object.keys(weekDays).forEach(day => {
+      const categories = { produce: [], protein: [], dairy: [], dry: [], other: [] };
+      const seenByCategory = { produce: new Set(), protein: new Set(), dairy: new Set(), dry: new Set(), other: new Set() };
+      const dayMenu = weekDays[day];
+      const weekRecipes = recipesData[weekKey] || {};
+
+      Object.keys(dayMenu).forEach(menuCategory => {
+        const dishName = dayMenu[menuCategory];
+        if (!dishName || /^(n\/a|add alternative)$/i.test(dishName.trim())) return;
+        const recipeKey = findRecipeKey(weekRecipes, dishName);
+        if (!recipeKey) return;
+
+        parseIngredientsFromRecipeHtml(weekRecipes[recipeKey]).forEach(ingredient => {
+          const normalized = normalizeName(ingredient.name);
+          if (!normalized) return;
+          const category = categoryLookup[normalized] || 'other';
+          if (seenByCategory[category].has(normalized)) return;
+          seenByCategory[category].add(normalized);
+          categories[category].push(ingredient);
+        });
+      });
+
+      generatedMenu.push({ week: weekNumber, day, categories });
+    });
+  });
+
+  menuData.menu = generatedMenu;
+  validateIngredientCheckerData();
+}
+
+function validateIngredientCheckerData() {
+  const weeks = new Set(menuData.menu.map(entry => entry.week));
+  weeks.forEach(week => {
+    const weekEntries = menuData.menu.filter(entry => entry.week === week);
+    const seen = new Set();
+    let count = 0;
+    weekEntries.forEach(entry => {
+      ingredientCategories.forEach(category => {
+        (entry.categories[category] || []).forEach(item => {
+          const key = `${entry.day}|${category}|${normalizeName(item.name)}`;
+          if (seen.has(key)) {
+            throw new Error(`Duplicate ingredient found in week ${week}: ${item.name} (${entry.day})`);
+          }
+          seen.add(key);
+          count += 1;
+        });
+      });
+    });
+    if (count === 0) {
+      throw new Error(`Ingredient checker has no ingredients for week ${week}`);
+    }
+  });
 }
 
 /**
@@ -310,6 +471,7 @@ function attachEvents() {
 
 // Initialize the dashboard once the DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
+  buildIngredientCheckerData();
   populateWeeks();
   populateDays();
   renderMenuRow();
