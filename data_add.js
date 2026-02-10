@@ -8,13 +8,13 @@
  * four-week rotation, preventing missing data errors in the UI.
  */
 
-// Ensure menuData exists
-if (typeof menuData === 'undefined') {
-  var menuData = { menu: [] };
+// Ensure menuData exists without redeclaring a global const from data.js
+if (!globalThis.menuData) {
+  globalThis.menuData = { menu: [] };
 }
 
 // Append placeholder category entries for Week 3 and Week 4
-menuData.menu = menuData.menu.concat([
+globalThis.menuData.menu = globalThis.menuData.menu.concat([
   // Week 3
   { week: 3, day: 'Sunday',    categories: { produce: [], protein: [], dairy: [], dry: [], other: [] } },
   { week: 3, day: 'Monday',    categories: { produce: [], protein: [], dairy: [], dry: [], other: [] } },
