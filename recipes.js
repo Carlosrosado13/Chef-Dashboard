@@ -145,3 +145,4 @@ const recipesData = {
     'Duck Fat Potatoes': `<h2>Duck Fat Potatoes</h2><p>Portion: 7 oz</p><table><colgroup><col style="width: 58%"/><col style="width: 14%"/><col style="width: 14%"/><col style="width: 14%"/></colgroup><thead><tr class="header"><th>Ingredient</th><th>50</th><th>100</th><th>150</th></tr></thead><tbody><tr><td>Yukon potatoes</td><td>25 lb</td><td>50 lb</td><td>75 lb</td></tr><tr><td>Duck fat</td><td>4 lb</td><td>8 lb</td><td>12 lb</td></tr><tr><td>Garlic</td><td>6 oz</td><td>12 oz</td><td>18 oz</td></tr><tr><td>Thyme</td><td>to taste</td><td>to taste</td><td>to taste</td></tr><tr><td>Salt</td><td>to taste</td><td>to taste</td><td>to taste</td></tr></tbody></table><p>Roast at 425°F, turning until crisp.</p>`,
   },
 };
+globalThis.recipesData = recipesData;

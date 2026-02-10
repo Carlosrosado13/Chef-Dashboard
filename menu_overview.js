@@ -316,3 +316,4 @@ const menuOverviewData = {
     }
   }
 };
+globalThis.menuOverviewData = menuOverviewData;
