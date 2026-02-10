@@ -17,6 +17,7 @@ const categoryTitles = [
 let selectedDish = null;
 
 const ingredientCategories = ['produce', 'protein', 'dairy', 'dry', 'other'];
+const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 /**
  * Normalize dish names by removing punctuation, parenthetical notes, and converting to lowercase.
@@ -177,6 +178,9 @@ function buildIngredientCheckerData() {
 
 function validateIngredientCheckerData() {
   const weeks = new Set(menuData.menu.map(entry => entry.week));
+  let totalIngredients = 0;
+  const emptyWeeks = [];
+
   weeks.forEach(week => {
     const weekEntries = menuData.menu.filter(entry => entry.week === week);
     const seen = new Set();
@@ -194,9 +198,18 @@ function validateIngredientCheckerData() {
       });
     });
     if (count === 0) {
-      throw new Error(`Ingredient checker has no ingredients for week ${week}`);
+      emptyWeeks.push(week);
     }
+    totalIngredients += count;
   });
+
+  if (totalIngredients === 0) {
+    throw new Error('Ingredient checker has no ingredients loaded.');
+  }
+
+  if (emptyWeeks.length > 0) {
+    console.warn(`Ingredient checker has no generated ingredients for week(s): ${emptyWeeks.join(', ')}.`);
+  }
 }
 
 /**
@@ -281,12 +294,14 @@ function populateWeeks() {
   const weekSelect = document.getElementById('weekSelect');
   weekSelect.innerHTML = '';
   // Extract available week keys from menuOverviewData
-  for (const week in menuOverviewData) {
+  Object.keys(menuOverviewData)
+    .sort((a, b) => Number(a) - Number(b))
+    .forEach(week => {
     const option = document.createElement('option');
     option.value = week;
-    option.textContent = 'week'+week;
+    option.textContent = `Week ${week}`;
     weekSelect.appendChild(option);
-  }
+    });
 }
 
 /**
@@ -297,7 +312,8 @@ function populateDays() {
   const daySelect = document.getElementById('daySelect');
   daySelect.innerHTML = '';
   const week = weekSelect.value;
-  const days = menuOverviewData[week] ? Object.keys(menuOverviewData[week]) : [];
+  const weekData = menuOverviewData[week] || {};
+  const days = dayOrder.filter(day => Object.prototype.hasOwnProperty.call(weekData, day));
   days.forEach(day => {
     const option = document.createElement('option');
     option.value = day;
