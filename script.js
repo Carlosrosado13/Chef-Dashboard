@@ -489,9 +489,20 @@ function attachEvents() {
 
 // Initialize the dashboard once the DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-  buildIngredientCheckerData();
+  if (!menuOverviewData || !Object.keys(menuOverviewData).length) {
+    console.error('Menu overview data failed to load; week/day dropdowns cannot be populated.');
+    return;
+  }
+
   populateWeeks();
   populateDays();
+
+  try {
+    buildIngredientCheckerData();
+  } catch (error) {
+    console.error('Failed to build ingredient checker data:', error);
+  }
+
   renderMenuRow();
   renderIngredients();
   attachEvents();
