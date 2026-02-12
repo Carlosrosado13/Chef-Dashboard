@@ -18,6 +18,21 @@ let selectedDish = null;
 
 const ingredientCategories = ['produce', 'protein', 'dairy', 'dry', 'other'];
 const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const weeklyDayAliases = {
+  Monday: ['Monday', 'Mon'],
+  Tuesday: ['Tuesday', 'Tue', 'Tues'],
+  Wednesday: ['Wednesday', 'Wed'],
+  Thursday: ['Thursday', 'Thu', 'Thur', 'Thurs'],
+  Friday: ['Friday', 'Fri'],
+  Saturday: ['Saturday', 'Sat'],
+  Sunday: ['Sunday', 'Sun']
+};
+const WEEKLY_VIEW_DEBUG = false;
+
+function debugWeeklyView(...args) {
+  if (!WEEKLY_VIEW_DEBUG) return;
+  console.log('[WeeklyView]', ...args);
+}
 
 /**
  * Normalize dish names by removing punctuation, parenthetical notes, and converting to lowercase.
@@ -438,9 +453,25 @@ function renderWeeklyView(weekId) {
 
   weeklyMenuGrid.innerHTML = '';
   const week = weekId || weekSelect.value;
-  const weekData = menuOverviewData[week] || {};
+  const activeTab = document.querySelector('.tab-button.active')?.id || 'unknown';
+
+  debugWeeklyView('activeTab:', activeTab, 'selectedWeek:', week);
+
+  // Temporary fallback render for diagnostics if no data is available.
+  if (!menuOverviewData || !menuOverviewData[week]) {
+    dayOrder.forEach(day => {
+      const fallbackCard = document.createElement('section');
+      fallbackCard.className = 'day-card';
+      fallbackCard.innerHTML = `<h2 class="day-card-title">${day}</h2><div class="day-card-slot-value">Loaded Week ${week}</div>`;
+      weeklyMenuGrid.appendChild(fallbackCard);
+    });
+    return;
+  }
 
   dayOrder.forEach(day => {
+    const dayData = getMenuFor(week, day);
+    debugWeeklyView('day loop:', day, 'menu data:', dayData);
+
     const dayCard = document.createElement('section');
     dayCard.className = 'day-card';
 
@@ -451,7 +482,6 @@ function renderWeeklyView(weekId) {
 
     const slots = document.createElement('div');
     slots.className = 'day-card-slots';
-    const dayData = weekData[day] || {};
 
     categoryTitles.forEach(category => {
       const slot = document.createElement('div');
@@ -473,6 +503,21 @@ function renderWeeklyView(weekId) {
     dayCard.appendChild(slots);
     weeklyMenuGrid.appendChild(dayCard);
   });
+}
+
+function getMenuFor(weekKey, dayName) {
+  const weekData = menuOverviewData && menuOverviewData[weekKey];
+  if (!weekData) return {};
+
+  const aliases = weeklyDayAliases[dayName] || [dayName];
+  for (let i = 0; i < aliases.length; i += 1) {
+    const alias = aliases[i];
+    if (Object.prototype.hasOwnProperty.call(weekData, alias)) {
+      return weekData[alias] || {};
+    }
+  }
+
+  return {};
 }
 
 function setDaySelectorVisibility(showDaySelector) {
