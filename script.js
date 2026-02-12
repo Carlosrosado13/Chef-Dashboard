@@ -436,25 +436,19 @@ function switchTab(tab) {
   const recipeTab = document.getElementById('recipeTab');
   const ingredientTab = document.getElementById('ingredientTab');
   const recipesView = document.getElementById('recipesView');
-  const ingredientsView = document.getElementById('ingredientsView');
-  const searchLabel = document.getElementById('searchLabel');
-  const searchInput = document.getElementById('searchInput');
+  const mobileMode = tab === 'ingredients' ? 'ingredients' : 'recipes';
+
+  recipesView.dataset.mobileView = mobileMode;
+
   if (tab === 'recipes') {
     recipeTab.classList.add('active');
     ingredientTab.classList.remove('active');
     recipesView.classList.add('active');
-    ingredientsView.classList.remove('active');
-    // Hide search controls when not on ingredients tab
-    searchLabel.style.display = 'none';
-    searchInput.style.display = 'none';
   } else {
     recipeTab.classList.remove('active');
     ingredientTab.classList.add('active');
     recipesView.classList.remove('active');
-    ingredientsView.classList.add('active');
-    // Show search controls when on ingredients tab
-    searchLabel.style.display = '';
-    searchInput.style.display = '';
+    recipesView.classList.add('active');
   }
 }
 
@@ -506,6 +500,6 @@ document.addEventListener('DOMContentLoaded', () => {
   renderMenuRow();
   renderIngredients();
   attachEvents();
-  // Set default to recipe tab and hide search controls initially
+  // Set default to recipe tab
   switchTab('recipes');
 });

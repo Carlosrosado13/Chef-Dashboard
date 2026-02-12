@@ -26,35 +26,40 @@
   </header>
 
   <main class="dashboard-shell">
-    <!-- Top navigation tabs -->
-    <nav class="top-tabs" aria-label="Dashboard views">
-      <button id="recipeTab" class="tab-button active">Recipe Search</button>
-      <button id="ingredientTab" class="tab-button">Ingredients Checker</button>
-    </nav>
+    <section class="controls-row" aria-label="Dashboard filters and views">
+      <nav class="top-tabs" aria-label="Dashboard views">
+        <button id="recipeTab" class="tab-button active">Recipe Search</button>
+        <button id="ingredientTab" class="tab-button">Ingredients Checker</button>
+      </nav>
 
-    <!-- Controls for selecting week/day and searching -->
-    <section class="controls" aria-label="Filter controls">
-      <label for="weekSelect">Week:</label>
-      <select id="weekSelect"></select>
+      <section class="controls" aria-label="Filter controls">
+        <label for="weekSelect">Week:</label>
+        <select id="weekSelect"></select>
 
-      <label for="daySelect">Day:</label>
-      <select id="daySelect"></select>
-
-      <label id="searchLabel" for="searchInput">Search:</label>
-      <input type="text" id="searchInput" placeholder="Filter ingredients..." />
+        <label for="daySelect">Day:</label>
+        <select id="daySelect"></select>
+      </section>
     </section>
 
-    <!-- Recipes view: shows menu categories and dishes -->
-    <section id="recipesView" class="tab-content active">
-      <div id="menuRow" class="menu-row"></div>
-      <!-- Container for displaying detailed recipe of selected dish -->
-      <div id="recipeDetails" class="recipe-details"></div>
+    <section id="recipesView" class="layout-grid tab-content active" data-mobile-view="recipes">
+      <section class="recipes-panel" aria-label="Recipe search panel">
+        <div id="menuRow" class="menu-row"></div>
+        <div id="recipeDetails" class="recipe-details"></div>
+      </section>
+
+      <aside class="ingredients-panel" aria-label="Ingredients checker panel">
+        <div class="ingredients-panel-header">
+          <h2>Ingredients Checker</h2>
+          <div class="ingredients-search">
+            <label id="searchLabel" for="searchInput">Search:</label>
+            <input type="text" id="searchInput" placeholder="Filter ingredients..." />
+          </div>
+        </div>
+        <div id="ingredientsContainer"></div>
+      </aside>
     </section>
 
-    <!-- Ingredients view: shows grouped ingredient lists -->
-    <section id="ingredientsView" class="tab-content">
-      <div id="ingredientsContainer"></div>
-    </section>
+    <section id="ingredientsView" class="tab-content" aria-hidden="true"></section>
   </main>
 
   <!-- Main script -->
