@@ -431,13 +431,13 @@ function renderIngredients() {
 /**
  * Render a full Monday-to-Sunday weekly menu for the selected week.
  */
-function renderWeeklyView() {
+function renderWeeklyView(weekId) {
   const weekSelect = document.getElementById('weekSelect');
   const weeklyMenuGrid = document.getElementById('weeklyMenuGrid');
   if (!weeklyMenuGrid || !weekSelect) return;
 
   weeklyMenuGrid.innerHTML = '';
-  const week = weekSelect.value;
+  const week = weekId || weekSelect.value;
   const weekData = menuOverviewData[week] || {};
 
   dayOrder.forEach(day => {
@@ -475,6 +475,15 @@ function renderWeeklyView() {
   });
 }
 
+function setDaySelectorVisibility(showDaySelector) {
+  const dayFilterGroup = document.getElementById('dayFilterGroup');
+  const daySelect = document.getElementById('daySelect');
+  if (!dayFilterGroup || !daySelect) return;
+
+  dayFilterGroup.classList.toggle('hidden', !showDaySelector);
+  daySelect.disabled = !showDaySelector;
+}
+
 /**
  * Switch between recipe and ingredients views.
  * @param {string} tab Either 'recipes', 'ingredients', or 'weekly'
@@ -495,6 +504,7 @@ function switchTab(tab) {
     weeklyTab.classList.remove('active');
     recipesView.classList.add('active');
     weeklyView.classList.remove('active');
+    setDaySelectorVisibility(true);
   } else {
     if (tab === 'ingredients') {
       recipeTab.classList.remove('active');
@@ -502,12 +512,16 @@ function switchTab(tab) {
       weeklyTab.classList.remove('active');
       recipesView.classList.add('active');
       weeklyView.classList.remove('active');
+      setDaySelectorVisibility(true);
     } else {
       recipeTab.classList.remove('active');
       ingredientTab.classList.remove('active');
       weeklyTab.classList.add('active');
       recipesView.classList.remove('active');
       weeklyView.classList.add('active');
+      setDaySelectorVisibility(false);
+      const weekSelect = document.getElementById('weekSelect');
+      renderWeeklyView(weekSelect.value);
     }
   }
 }
@@ -523,10 +537,16 @@ function attachEvents() {
   const ingredientTab = document.getElementById('ingredientTab');
   const weeklyTab = document.getElementById('weeklyTab');
   weekSelect.addEventListener('change', () => {
-    populateDays();
-    renderMenuRow();
-    renderIngredients();
-    renderWeeklyView();
+    const weeklyView = document.getElementById('weeklyView');
+    const isWeeklyActive = weeklyView.classList.contains('active');
+
+    if (!isWeeklyActive) {
+      populateDays();
+      renderMenuRow();
+      renderIngredients();
+    }
+
+    renderWeeklyView(weekSelect.value);
   });
   daySelect.addEventListener('change', () => {
     renderMenuRow();
@@ -553,6 +573,8 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
 
+  const weekSelect = document.getElementById('weekSelect');
+
   populateWeeks();
   populateDays();
 
@@ -564,7 +586,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   renderMenuRow();
   renderIngredients();
-  renderWeeklyView();
+  renderWeeklyView(weekSelect.value);
   attachEvents();
   // Set default to recipe tab
   switchTab('recipes');

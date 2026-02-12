@@ -118,6 +118,15 @@ body {
   font-weight: 600;
 }
 
+
+.day-filter-group {
+  display: contents;
+}
+
+.day-filter-group.hidden {
+  display: none;
+}
+
 #weekSelect,
 #daySelect,
 #searchInput {
