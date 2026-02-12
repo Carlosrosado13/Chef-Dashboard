@@ -18,7 +18,7 @@ let selectedDish = null;
 
 const ingredientCategories = ['produce', 'protein', 'dairy', 'dry', 'other'];
 const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-const weeklyDayAliases = {
+const WEEKLY_DAY_KEYS = {
   Monday: ['Monday', 'Mon'],
   Tuesday: ['Tuesday', 'Tue', 'Tues'],
   Wednesday: ['Wednesday', 'Wed'],
@@ -27,12 +27,6 @@ const weeklyDayAliases = {
   Saturday: ['Saturday', 'Sat'],
   Sunday: ['Sunday', 'Sun']
 };
-const WEEKLY_VIEW_DEBUG = false;
-
-function debugWeeklyView(...args) {
-  if (!WEEKLY_VIEW_DEBUG) return;
-  console.log('[WeeklyView]', ...args);
-}
 
 /**
  * Normalize dish names by removing punctuation, parenthetical notes, and converting to lowercase.
@@ -451,38 +445,42 @@ function renderWeeklyView(weekId) {
   const weeklyMenuGrid = document.getElementById('weeklyMenuGrid');
   if (!weeklyMenuGrid || !weekSelect) return;
 
-  weeklyMenuGrid.innerHTML = '';
   const week = weekId || weekSelect.value;
   const activeTab = document.querySelector('.tab-button.active')?.id || 'unknown';
+  const weeklyContainer = document.getElementById('weeklyMenuGrid');
 
-  debugWeeklyView('activeTab:', activeTab, 'selectedWeek:', week);
+  console.log('[WeeklyView] activeTab:', activeTab);
+  console.log('[WeeklyView] selectedWeek:', week);
+  console.log('[WeeklyView] weekly container element:', weeklyContainer);
 
-  // Temporary fallback render for diagnostics if no data is available.
+  // STEP 1: forced render proof that should always appear.
+  weeklyMenuGrid.innerHTML = `<div class="weekly-proof-heading">Weekly View Loaded — Week ${week}</div>`;
+
+  dayOrder.forEach(day => {
+    const proofCard = document.createElement('section');
+    proofCard.className = 'day-card';
+    proofCard.dataset.day = day;
+    proofCard.innerHTML = `
+      <h2 class="day-card-title">${day}</h2>
+      <div class="day-card-slot-value" data-day-content="${day}">Test render OK</div>
+    `;
+    weeklyMenuGrid.appendChild(proofCard);
+  });
+
+  // STEP 2: replace placeholders with real data when available.
   if (!menuOverviewData || !menuOverviewData[week]) {
-    dayOrder.forEach(day => {
-      const fallbackCard = document.createElement('section');
-      fallbackCard.className = 'day-card';
-      fallbackCard.innerHTML = `<h2 class="day-card-title">${day}</h2><div class="day-card-slot-value">Loaded Week ${week}</div>`;
-      weeklyMenuGrid.appendChild(fallbackCard);
-    });
     return;
   }
 
   dayOrder.forEach(day => {
     const dayData = getMenuFor(week, day);
-    debugWeeklyView('day loop:', day, 'menu data:', dayData);
+    console.log(`[WeeklyView] ${day} menu data:`, dayData);
 
-    const dayCard = document.createElement('section');
-    dayCard.className = 'day-card';
-
-    const title = document.createElement('h2');
-    title.className = 'day-card-title';
-    title.textContent = day;
-    dayCard.appendChild(title);
+    const dayCard = weeklyMenuGrid.querySelector(`[data-day="${day}"]`);
+    if (!dayCard) return;
 
     const slots = document.createElement('div');
     slots.className = 'day-card-slots';
-
     categoryTitles.forEach(category => {
       const slot = document.createElement('div');
       slot.className = 'day-card-slot';
@@ -500,8 +498,12 @@ function renderWeeklyView(weekId) {
       slots.appendChild(slot);
     });
 
-    dayCard.appendChild(slots);
-    weeklyMenuGrid.appendChild(dayCard);
+    const proofText = dayCard.querySelector(`[data-day-content="${day}"]`);
+    if (proofText) {
+      proofText.replaceWith(slots);
+    } else {
+      dayCard.appendChild(slots);
+    }
   });
 }
 
@@ -509,7 +511,7 @@ function getMenuFor(weekKey, dayName) {
   const weekData = menuOverviewData && menuOverviewData[weekKey];
   if (!weekData) return {};
 
-  const aliases = weeklyDayAliases[dayName] || [dayName];
+  const aliases = WEEKLY_DAY_KEYS[dayName] || [dayName];
   for (let i = 0; i < aliases.length; i += 1) {
     const alias = aliases[i];
     if (Object.prototype.hasOwnProperty.call(weekData, alias)) {
