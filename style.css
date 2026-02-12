@@ -291,6 +291,57 @@ body {
   display: none;
 }
 
+#weeklyView {
+  display: none;
+}
+
+.weekly-menu-grid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-4);
+}
+
+.day-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
+}
+
+.day-card-title {
+  margin: 0 0 var(--space-3);
+  color: var(--brand-navy);
+  font-size: 1.1rem;
+}
+
+.day-card-slots {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.day-card-slot {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  background: linear-gradient(160deg, #fff, #f8fbff);
+}
+
+.day-card-slot-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+  color: var(--brand-teal-dark);
+  margin-bottom: 4px;
+}
+
+.day-card-slot-value {
+  color: var(--text-primary);
+  line-height: 1.35;
+}
+
 @media (max-width: 980px) {
   .layout-grid {
     grid-template-columns: 1fr;
@@ -324,7 +375,7 @@ body {
   }
 
   .tab-button {
-    flex: 1 1 50%;
+    flex: 1 1 33.33%;
     text-align: center;
   }
 
