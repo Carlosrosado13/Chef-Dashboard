@@ -429,13 +429,62 @@ function renderIngredients() {
 }
 
 /**
+ * Render a full Monday-to-Sunday weekly menu for the selected week.
+ */
+function renderWeeklyView() {
+  const weekSelect = document.getElementById('weekSelect');
+  const weeklyMenuGrid = document.getElementById('weeklyMenuGrid');
+  if (!weeklyMenuGrid || !weekSelect) return;
+
+  weeklyMenuGrid.innerHTML = '';
+  const week = weekSelect.value;
+  const weekData = menuOverviewData[week] || {};
+
+  dayOrder.forEach(day => {
+    const dayCard = document.createElement('section');
+    dayCard.className = 'day-card';
+
+    const title = document.createElement('h2');
+    title.className = 'day-card-title';
+    title.textContent = day;
+    dayCard.appendChild(title);
+
+    const slots = document.createElement('div');
+    slots.className = 'day-card-slots';
+    const dayData = weekData[day] || {};
+
+    categoryTitles.forEach(category => {
+      const slot = document.createElement('div');
+      slot.className = 'day-card-slot';
+
+      const label = document.createElement('div');
+      label.className = 'day-card-slot-label';
+      label.textContent = category;
+
+      const value = document.createElement('div');
+      value.className = 'day-card-slot-value';
+      value.textContent = dayData[category] || 'Add alternative';
+
+      slot.appendChild(label);
+      slot.appendChild(value);
+      slots.appendChild(slot);
+    });
+
+    dayCard.appendChild(slots);
+    weeklyMenuGrid.appendChild(dayCard);
+  });
+}
+
+/**
  * Switch between recipe and ingredients views.
- * @param {string} tab Either 'recipes' or 'ingredients'
+ * @param {string} tab Either 'recipes', 'ingredients', or 'weekly'
  */
 function switchTab(tab) {
   const recipeTab = document.getElementById('recipeTab');
   const ingredientTab = document.getElementById('ingredientTab');
+  const weeklyTab = document.getElementById('weeklyTab');
   const recipesView = document.getElementById('recipesView');
+  const weeklyView = document.getElementById('weeklyView');
   const mobileMode = tab === 'ingredients' ? 'ingredients' : 'recipes';
 
   recipesView.dataset.mobileView = mobileMode;
@@ -443,12 +492,23 @@ function switchTab(tab) {
   if (tab === 'recipes') {
     recipeTab.classList.add('active');
     ingredientTab.classList.remove('active');
+    weeklyTab.classList.remove('active');
     recipesView.classList.add('active');
+    weeklyView.classList.remove('active');
   } else {
-    recipeTab.classList.remove('active');
-    ingredientTab.classList.add('active');
-    recipesView.classList.remove('active');
-    recipesView.classList.add('active');
+    if (tab === 'ingredients') {
+      recipeTab.classList.remove('active');
+      ingredientTab.classList.add('active');
+      weeklyTab.classList.remove('active');
+      recipesView.classList.add('active');
+      weeklyView.classList.remove('active');
+    } else {
+      recipeTab.classList.remove('active');
+      ingredientTab.classList.remove('active');
+      weeklyTab.classList.add('active');
+      recipesView.classList.remove('active');
+      weeklyView.classList.add('active');
+    }
   }
 }
 
@@ -461,10 +521,12 @@ function attachEvents() {
   const searchInput = document.getElementById('searchInput');
   const recipeTab = document.getElementById('recipeTab');
   const ingredientTab = document.getElementById('ingredientTab');
+  const weeklyTab = document.getElementById('weeklyTab');
   weekSelect.addEventListener('change', () => {
     populateDays();
     renderMenuRow();
     renderIngredients();
+    renderWeeklyView();
   });
   daySelect.addEventListener('change', () => {
     renderMenuRow();
@@ -478,6 +540,9 @@ function attachEvents() {
   });
   ingredientTab.addEventListener('click', () => {
     switchTab('ingredients');
+  });
+  weeklyTab.addEventListener('click', () => {
+    switchTab('weekly');
   });
 }
 
@@ -499,6 +564,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   renderMenuRow();
   renderIngredients();
+  renderWeeklyView();
   attachEvents();
   // Set default to recipe tab
   switchTab('recipes');
