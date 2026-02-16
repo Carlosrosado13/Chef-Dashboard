@@ -52,53 +52,53 @@ const lunchMenuData = {
   },
   "Week 2": {
     "Monday": {
-      "SOUP": "CREAM OF BROCCOLI   (GF)",
-      "SALAD": "GREEK SALAD (GF)",
-      "MAIN 1": "ROASTED PORK LOIN / APPLE DIJON SAUCE                           (GF)",
-      "MAIN 2": "CHICKEN CAESAR WRAP",
-      "DESSERT": "PEANUT BUTTER BROWNIE"
+      "SOUP": "Carrot Ginger Soup",
+      "SALAD": "Baby Kale, Quinoa & Pomegranate Salad",
+      "MAIN 1": "Grilled Swordfish with Caponata",
+      "MAIN 2": "Chicken Marsala",
+      "DESSERT": "Coconut Rice Pudding"
     },
     "Tuesday": {
-      "SOUP": "BEEF AND BARLEY",
-      "SALAD": "QUINOA / CHICKPEA / CUCUMBER / MINT                           (GF/DF)",
-      "MAIN 1": "SPAGHETTI AND MEATBALLS",
-      "MAIN 2": "TURKEY BURGER / LETTUCE / TOMATO / PICKLES",
-      "DESSERT": "CHERRY CHEESECAKE"
+      "SOUP": "French Onion Soup",
+      "SALAD": "Roasted Beet & Goat Cheese Salad",
+      "MAIN 1": "Lamb Meatballs with Yogurt Sauce",
+      "MAIN 2": "Spinach & Ricotta Cannelloni",
+      "DESSERT": "Chocolate Mousse"
     },
     "Wednesday": {
-      "SOUP": "CHICKEN TORTILLA  (GF)",
-      "SALAD": "COLESLAW (GF/DF)",
-      "MAIN 1": "BEEF TACOS / LETTUCE / TOMATO / SOUR CREAM",
-      "MAIN 2": "CHICKEN PARM SANDWICH / MARINARA / MOZZARELLA",
-      "DESSERT": "CHOCOLATE ÉCLAIR"
+      "SOUP": "Leek & Potato Soup",
+      "SALAD": "Shaved Brussels Sprouts & Parmesan Salad",
+      "MAIN 1": "Miso-Glazed Salmon",
+      "MAIN 2": "Pork Schnitzel",
+      "DESSERT": "Vanilla Poached Pears"
     },
     "Thursday": {
-      "SOUP": "MINESTRONE  (DF)",
-      "SALAD": "CAPRESE SALAD (GF)",
-      "MAIN 1": "SALMON / LEMON DILL SAUCE                              (GF)",
-      "MAIN 2": "ROAST TURKEY / GRAVY                                     (GF)",
-      "DESSERT": "APPLE TURNOVER"
+      "SOUP": "Tomato Bisque",
+      "SALAD": "Mixed Greens with Champagne Vinaigrette",
+      "MAIN 1": "Turkey Roulade",
+      "MAIN 2": "Eggplant Parmesan",
+      "DESSERT": "Lemon Tart"
     },
     "Friday": {
-      "SOUP": "SEAFOOD CHOWDER  (GF)",
-      "SALAD": "KALE / CRANBERRY / PUMPKIN SEEDS                         (GF/DF)",
-      "MAIN 1": "FISH TACOS / SLAW / LIME CREMA",
-      "MAIN 2": "BEEF BURGER / CHEDDAR / LETTUCE / TOMATO",
-      "DESSERT": "RED VELVET CAKE"
+      "SOUP": "Potato & Bacon Chowder",
+      "SALAD": "Classic Wedge Salad",
+      "MAIN 1": "Seared Scallops",
+      "MAIN 2": "Beef Stroganoff",
+      "DESSERT": "Cheesecake Bars"
     },
     "Saturday": {
-      "SOUP": "TOMATO SOUP  (GF/DF)",
-      "SALAD": "SPINACH / GOAT CHEESE / WALNUT                         (GF)",
-      "MAIN 1": "CHICKEN FAJITAS / PEPPERS / ONION",
-      "MAIN 2": "MEATLOAF / GRAVY                                        (GF)",
-      "DESSERT": "LEMON LOAF"
+      "SOUP": "Roasted Cauliflower Soup",
+      "SALAD": "Arugula & Shaved Parmesan Salad",
+      "MAIN 1": "Grilled Chicken Pesto",
+      "MAIN 2": "Mushroom Tagliatelle",
+      "DESSERT": "Berry Shortcake"
     },
     "Sunday": {
-      "SOUP": "BUTTERNUT SQUASH  (GF/DF)",
-      "SALAD": "MIXED GREENS / BALSAMIC                                    (GF/DF)",
-      "MAIN 1": "ROAST BEEF / YORKSHIRE / GRAVY                         (GF)",
-      "MAIN 2": "HAM AND SWISS PANINI / DIJON",
-      "DESSERT": "BANANA BREAD PUDDING"
+      "SOUP": "Lentil & Herb Soup",
+      "SALAD": "Cabbage Slaw with Apple Cider Vinaigrette",
+      "MAIN 1": "Braised Pork Shoulder",
+      "MAIN 2": "Stuffed Peppers",
+      "DESSERT": "Bread Pudding with Vanilla Sauce"
     }
   },
   "Week 3": {
