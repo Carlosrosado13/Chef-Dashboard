@@ -1,11 +1,15 @@
 // Chef Dashboard Script
 
 const dinnerCategoryConfig = [
-  { key: 'SOUP', label: 'Soup' },
-  { key: 'SALAD', label: 'Salad' },
-  { key: 'MAIN 1', label: 'Main 1' },
-  { key: 'MAIN 2', label: 'Main 2' },
-  { key: 'DESSERT', label: 'Dessert' }
+  { key: 'Appetizer 1', label: 'Appetizer 1' },
+  { key: 'Appetizer 2', label: 'Appetizer 2' },
+  { key: 'Elevated', label: 'Elevated' },
+  { key: 'Traditional', label: 'Traditional' },
+  { key: 'Alternative', label: 'Alternative' },
+  { key: 'Veg 1', label: 'Veg 1' },
+  { key: 'Veg 2', label: 'Veg 2' },
+  { key: 'Starch', label: 'Starch' },
+  { key: 'Dessert', label: 'Dessert' }
 ];
 
 const lunchCategoryConfig = [
@@ -38,7 +42,7 @@ function resolveGlobalValue(...names) {
 
 const ingredientDataStore = resolveGlobalValue('menuData') || { menu: [] };
 const mealData = {
-  dinner: resolveGlobalValue('dinnerMenuData', 'menuOverviewData') || {},
+  dinner: resolveGlobalValue('menuOverviewData', 'dinnerMenuData') || {},
   lunch: resolveGlobalValue('lunchMenuData') || {}
 };
 const recipesStore = resolveGlobalValue('recipesData') || null;
@@ -251,7 +255,7 @@ function renderRecipe() {
   const weekSelect = document.getElementById('weekSelect');
   const week = weekSelect.value;
 
-  if (!selectedDish || selectedDish === 'Add alternative') {
+  if (!selectedDish || /^(add alternative|n\/a)$/i.test(selectedDish)) {
     recipeDetails.innerHTML = '<p>Select a dish to view its recipe.</p>';
     return;
   }
@@ -273,7 +277,7 @@ function renderRecipe() {
 function handleDishClick(elem) {
   if (selectedMeal === 'lunch') return;
   const dishName = elem.dataset.dish;
-  if (!dishName || dishName === 'Add alternative') return;
+  if (!dishName || /^(add alternative|n\/a)$/i.test(dishName)) return;
 
   selectedDish = dishName;
   const blocks = document.querySelectorAll('.menu-item-block');
@@ -350,7 +354,7 @@ function getCategoryConfig(meal) {
 }
 
 function getDefaultDishText(meal) {
-  return meal === 'dinner' ? 'Add alternative' : 'Menu item not set';
+  return meal === 'dinner' ? 'N/A' : 'Menu item not set';
 }
 
 function renderDay(meal, weekKey, dayName) {
@@ -572,52 +576,6 @@ function setMeal(meal) {
   }
 }
 
-function normalizeMenuValue(value) {
-  return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
-}
-
-function validateDinnerSpotChecks() {
-  const isDevMode = ['localhost', '127.0.0.1', ''].includes(window.location.hostname);
-  if (!isDevMode) return;
-
-  const checks = [
-    {
-      week: '1',
-      day: 'Monday',
-      expected: {
-        SOUP: 'Roasted Tomato Basil',
-        SALAD: 'Arugula / Shaved Fennel / Citrus Vinaigrette',
-        'MAIN 1': 'Grilled Lemon & Herb Chicken Breast',
-        'MAIN 2': 'Seared Salmon / Dill Yogurt',
-        DESSERT: 'Chocolate Pot de Creme'
-      }
-    },
-    {
-      week: '4',
-      day: 'Friday',
-      expected: {
-        SOUP: 'Corn Chowder',
-        SALAD: 'Bibb Lettuce / Radish',
-        'MAIN 1': 'Crab Cakes',
-        'MAIN 2': 'Beef Pastrami Sandwich',
-        DESSERT: 'Chocolate Layer Cake'
-      }
-    }
-  ];
-
-  checks.forEach(check => {
-    const actual = getMealMenu('dinner', check.week, check.day);
-    Object.keys(check.expected).forEach(key => {
-      if (normalizeMenuValue(actual[key]) !== normalizeMenuValue(check.expected[key])) {
-        console.warn(
-          `[Dinner data check] Week ${check.week} ${check.day} ${key} mismatch. ` +
-          `Expected "${check.expected[key]}" but got "${actual[key] || ''}".`
-        );
-      }
-    });
-  });
-}
-
 function attachEvents() {
   const weekSelect = document.getElementById('weekSelect');
   const daySelect = document.getElementById('daySelect');
@@ -700,7 +658,6 @@ function init() {
     console.warn('Failed to build ingredient checker data:', error);
   }
 
-  validateDinnerSpotChecks();
   setMeal('dinner');
   renderWeeklyView(document.getElementById('weekSelect').value);
   attachEvents();
