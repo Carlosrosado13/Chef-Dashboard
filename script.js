@@ -1,7 +1,6 @@
 // Chef Dashboard Script
 
-// Titles for the menu categories in order of appearance
-const categoryTitles = [
+const dinnerCategoryTitles = [
   'Appetizer 1',
   'Appetizer 2',
   'Elevated',
@@ -13,8 +12,16 @@ const categoryTitles = [
   'Dessert'
 ];
 
-// Currently selected dish name (displayed in recipe view)
+const lunchCategoryConfig = [
+  { key: 'SOUP', label: 'Soup' },
+  { key: 'MAIN 1', label: 'Main 1' },
+  { key: 'MAIN 2', label: 'Main 2' },
+  { key: 'SALAD', label: 'Side (Salad)' },
+  { key: 'DESSERT', label: 'Dessert' }
+];
+
 let selectedDish = null;
+let currentMeal = 'dinner';
 
 const ingredientCategories = ['produce', 'protein', 'dairy', 'dry', 'other'];
 const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -28,24 +35,13 @@ const WEEKLY_DAY_KEYS = {
   Sunday: ['Sunday', 'Sun']
 };
 
-/**
- * Normalize dish names by removing punctuation, parenthetical notes, and converting to lowercase.
- * This helps match menu entries to recipe keys in recipesData.
- * @param {string} name
- * @returns {string}
- */
 function normalizeName(name) {
   if (!name) return '';
-  // Remove text in parentheses
   let cleaned = name.replace(/\([^)]*\)/g, '');
-  // Replace hyphens and commas with space
   cleaned = cleaned.replace(/[-,]/g, ' ');
-  // Replace HTML entity for ampersand
   cleaned = cleaned.replace(/&amp;/g, 'and');
-  // Remove filler words like 'with' and 'and'
   cleaned = cleaned.replace(/\bwith\b/gi, ' ');
   cleaned = cleaned.replace(/\band\b/gi, ' ');
-  // Collapse multiple spaces and trim
   cleaned = cleaned.replace(/\s+/g, ' ').trim();
   return cleaned.toLowerCase();
 }
@@ -206,116 +202,72 @@ function validateIngredientCheckerData() {
         });
       });
     });
-    if (count === 0) {
-      emptyWeeks.push(week);
-    }
+    if (count === 0) emptyWeeks.push(week);
     totalIngredients += count;
   });
 
-  if (totalIngredients === 0) {
-    throw new Error('Ingredient checker has no ingredients loaded.');
-  }
-
+  if (totalIngredients === 0) throw new Error('Ingredient checker has no ingredients loaded.');
   if (emptyWeeks.length > 0) {
     console.warn(`Ingredient checker has no generated ingredients for week(s): ${emptyWeeks.join(', ')}.`);
   }
 }
 
-/**
- * Render the detailed recipe for the currently selected dish.
- * If a matching recipe is found in recipesData for the selected week, display it.
- * Otherwise, show a message indicating the recipe isn't available.
- */
 function renderRecipe() {
   const recipeDetails = document.getElementById('recipeDetails');
-  // Only render recipes when in the recipes tab
   if (!recipeDetails) return;
+
+  if (currentMeal === 'lunch') {
+    recipeDetails.innerHTML = '<p>Lunch recipes are coming next — for now this view shows menu items only.</p>';
+    return;
+  }
+
   const weekSelect = document.getElementById('weekSelect');
   const week = weekSelect.value;
-  // If no dish selected or placeholder, clear and return
+
   if (!selectedDish || selectedDish === 'Add alternative') {
     recipeDetails.innerHTML = '<p>Select a dish to view its recipe.</p>';
     return;
   }
-  // Access recipes for the selected week
+
   const weekRecipes = recipesData && recipesData[week];
   if (!weekRecipes) {
     recipeDetails.innerHTML = '<p>Recipe data not available for this week.</p>';
     return;
   }
-  const target = normalizeName(selectedDish);
-  let bestKey = null;
-  let bestScore = 0;
-  // Iterate through recipes to find best match based on normalized word overlap
-  for (const recipeName in weekRecipes) {
-    if (!Object.prototype.hasOwnProperty.call(weekRecipes, recipeName)) continue;
-    const normKey = normalizeName(recipeName);
-    // Exact match
-    if (normKey === target) {
-      bestKey = recipeName;
-      bestScore = 1;
-      break;
-    }
-    // Compute overlap score based on common words
-    const keyWords = normKey.split(' ').filter(w => w.length > 0);
-    const targetWords = target.split(' ').filter(w => w.length > 0);
-    if (keyWords.length === 0 || targetWords.length === 0) continue;
-    const common = targetWords.filter(word => keyWords.indexOf(word) !== -1);
-    const score = common.length / Math.min(keyWords.length, targetWords.length);
-    if (score > bestScore) {
-      bestScore = score;
-      bestKey = recipeName;
-    }
-  }
-  if (bestKey && bestScore >= 0.4) {
+
+  const bestKey = findRecipeKey(weekRecipes, selectedDish);
+  if (bestKey) {
     recipeDetails.innerHTML = weekRecipes[bestKey];
   } else {
     recipeDetails.innerHTML = '<p>Recipe not available for the selected dish.</p>';
   }
 }
 
-/**
- * Handle click on a menu item block.
- * Sets the selected dish and highlights the clicked block.
- * @param {HTMLElement} elem
- */
 function handleDishClick(elem) {
+  if (currentMeal === 'lunch') return;
   const dishName = elem.dataset.dish;
-  if (!dishName || dishName === 'Add alternative') {
-    return;
-  }
+  if (!dishName || dishName === 'Add alternative') return;
+
   selectedDish = dishName;
-  // Remove selected class from all blocks
   const blocks = document.querySelectorAll('.menu-item-block');
-  Array.prototype.forEach.call(blocks, block => {
-    block.classList.remove('selected');
-  });
-  // Add selected class to clicked block
+  Array.prototype.forEach.call(blocks, block => block.classList.remove('selected'));
   elem.classList.add('selected');
-  // Render the recipe details
   renderRecipe();
 }
 
-/**
- * Populate the week select dropdown with available weeks from menuOverviewData.
- */
 function populateWeeks() {
   const weekSelect = document.getElementById('weekSelect');
   weekSelect.innerHTML = '';
-  // Extract available week keys from menuOverviewData
   Object.keys(menuOverviewData)
     .sort((a, b) => Number(a) - Number(b))
     .forEach(week => {
-    const option = document.createElement('option');
-    option.value = week;
-    option.textContent = `Week ${week}`;
-    weekSelect.appendChild(option);
+      const option = document.createElement('option');
+      option.value = week;
+      option.textContent = `Week ${week}`;
+      weekSelect.appendChild(option);
     });
 }
 
-/**
- * Populate the day select dropdown based on the selected week.
- */
 function populateDays() {
   const weekSelect = document.getElementById('weekSelect');
   const daySelect = document.getElementById('daySelect');
@@ -331,43 +283,96 @@ function populateDays() {
   });
 }
 
-/**
- * Render the menu row for the current week and day.
- */
-function renderMenuRow() {
-  const weekSelect = document.getElementById('weekSelect');
-  const daySelect = document.getElementById('daySelect');
+function getMenuFor(weekKey, dayName) {
+  const weekData = menuOverviewData && menuOverviewData[weekKey];
+  if (!weekData) return {};
+
+  const aliases = WEEKLY_DAY_KEYS[dayName] || [dayName];
+  for (let i = 0; i < aliases.length; i += 1) {
+    const alias = aliases[i];
+    if (Object.prototype.hasOwnProperty.call(weekData, alias)) return weekData[alias] || {};
+  }
+  return {};
+}
+
+function getLunchMenu(weekKey, dayName) {
+  if (!lunchMenuData) return {};
+
+  const normalizedWeek = /^Week\s+\d+$/i.test(weekKey) ? weekKey : `Week ${weekKey}`;
+  const weekData = lunchMenuData[normalizedWeek];
+  if (!weekData) return {};
+
+  const aliases = WEEKLY_DAY_KEYS[dayName] || [dayName];
+  for (let i = 0; i < aliases.length; i += 1) {
+    const alias = aliases[i];
+    if (Object.prototype.hasOwnProperty.call(weekData, alias)) return weekData[alias] || {};
+  }
+
+  return {};
+}
+
+function renderLunchDay(weekKey, dayName) {
   const menuRow = document.getElementById('menuRow');
+  const lunchDay = getLunchMenu(weekKey, dayName);
   menuRow.innerHTML = '';
-  const week = weekSelect.value;
-  const day = daySelect.value;
-  const dayData = menuOverviewData[week] && menuOverviewData[week][day];
-  // Reset selected dish when rendering new day
+
   selectedDish = null;
-  categoryTitles.forEach(cat => {
+  lunchCategoryConfig.forEach(category => {
     const itemBlock = document.createElement('div');
     itemBlock.className = 'menu-item-block';
+
+    const label = document.createElement('div');
+    label.className = 'category-label';
+    label.textContent = category.label;
+
+    const dish = document.createElement('div');
+    dish.className = 'dish-name';
+    dish.textContent = lunchDay[category.key] || 'Menu item not set';
+
+    itemBlock.appendChild(label);
+    itemBlock.appendChild(dish);
+    menuRow.appendChild(itemBlock);
+  });
+
+  renderRecipe();
+}
+
+function renderMenuRow() {
+  const week = document.getElementById('weekSelect').value;
+  const day = document.getElementById('daySelect').value;
+
+  if (currentMeal === 'lunch') {
+    renderLunchDay(week, day);
+    return;
+  }
+
+  const menuRow = document.getElementById('menuRow');
+  menuRow.innerHTML = '';
+  const dayData = menuOverviewData[week] && menuOverviewData[week][day];
+  selectedDish = null;
+
+  dinnerCategoryTitles.forEach(cat => {
+    const itemBlock = document.createElement('div');
+    itemBlock.className = 'menu-item-block';
+
     const label = document.createElement('div');
     label.className = 'category-label';
     label.textContent = cat;
+
     const dish = document.createElement('div');
     dish.className = 'dish-name';
-    let dishText = 'Add alternative';
-    if (dayData && typeof dayData[cat] !== 'undefined' && dayData[cat] !== null) {
-      dishText = dayData[cat];
-    }
+    const dishText = dayData && typeof dayData[cat] !== 'undefined' && dayData[cat] !== null
+      ? dayData[cat]
+      : 'Add alternative';
     dish.textContent = dishText;
-    // Store dish name for click handling
+
     itemBlock.dataset.dish = dishText;
     itemBlock.appendChild(label);
     itemBlock.appendChild(dish);
-    // Attach click listener to each block for recipe display
-    itemBlock.addEventListener('click', () => {
-      handleDishClick(itemBlock);
-    });
+    itemBlock.addEventListener('click', () => handleDishClick(itemBlock));
     menuRow.appendChild(itemBlock);
   });
-  // Automatically select the first available dish
+
   const blocks = document.querySelectorAll('.menu-item-block');
   for (let i = 0; i < blocks.length; i += 1) {
     const block = blocks[i];
@@ -378,57 +383,54 @@ function renderMenuRow() {
   }
 }
 
-/**
- * Render the ingredients list for the current week and day.
- * Ingredients are grouped by their category (e.g., produce, protein).
- */
 function renderIngredients() {
-  const weekSelect = document.getElementById('weekSelect');
-  const daySelect = document.getElementById('daySelect');
-  const searchInput = document.getElementById('searchInput');
   const ingredientsContainer = document.getElementById('ingredientsContainer');
   ingredientsContainer.innerHTML = '';
-  const week = parseInt(weekSelect.value);
-  const day = daySelect.value;
-  // Find the corresponding entry in menuData.menu
+
+  if (currentMeal === 'lunch') {
+    const msg = document.createElement('p');
+    msg.className = 'no-results';
+    msg.textContent = 'Lunch ingredients checker coming next — we’ll add recipes first.';
+    ingredientsContainer.appendChild(msg);
+    return;
+  }
+
+  const week = Number(document.getElementById('weekSelect').value);
+  const day = document.getElementById('daySelect').value;
+  const searchTerm = document.getElementById('searchInput').value.trim().toLowerCase();
   const entry = menuData.menu.find(item => item.week === week && item.day === day);
+
   if (!entry || !entry.categories) {
-    // If no entry found, show a message
     const msg = document.createElement('p');
     msg.textContent = 'No ingredients available for this day.';
     ingredientsContainer.appendChild(msg);
     return;
   }
-  const searchTerm = searchInput.value.trim().toLowerCase();
+
   let hasResults = false;
-  // Iterate over each ingredient category
   for (const groupName in entry.categories) {
-    // Skip categories not recognized (safety check)
     if (!Object.prototype.hasOwnProperty.call(entry.categories, groupName)) continue;
-    const items = entry.categories[groupName];
-    // Filter items based on search term
-    const filtered = items.filter(item => {
-      return item.name.toLowerCase().includes(searchTerm);
+    const filtered = (entry.categories[groupName] || []).filter(item => item.name.toLowerCase().includes(searchTerm));
+    if (filtered.length === 0) continue;
+
+    hasResults = true;
+    const section = document.createElement('section');
+    const header = document.createElement('h3');
+    header.textContent = groupName.charAt(0).toUpperCase() + groupName.slice(1);
+    section.appendChild(header);
+
+    const ul = document.createElement('ul');
+    filtered.forEach(item => {
+      const li = document.createElement('li');
+      const quantityStr = item.quantity ? `${item.quantity} ${item.unit || ''}`.trim() : '';
+      li.textContent = quantityStr ? `${quantityStr} — ${item.name}` : item.name;
+      ul.appendChild(li);
     });
-    if (filtered.length > 0) {
-      hasResults = true;
-      const section = document.createElement('section');
-      const header = document.createElement('h3');
-      // Capitalize the group name for display
-      header.textContent = groupName.charAt(0).toUpperCase() + groupName.slice(1);
-      section.appendChild(header);
-      const ul = document.createElement('ul');
-      filtered.forEach(item => {
-        const li = document.createElement('li');
-        const quantityStr = item.quantity ? `${item.quantity} ${item.unit || ''}`.trim() : '';
-        li.textContent = quantityStr ? `${quantityStr} — ${item.name}` : item.name;
-        ul.appendChild(li);
-      });
-      section.appendChild(ul);
-      ingredientsContainer.appendChild(section);
-    }
+
+    section.appendChild(ul);
+    ingredientsContainer.appendChild(section);
   }
-  // If no results after filtering, show a message
+
   if (!hasResults) {
     const p = document.createElement('p');
     p.className = 'no-results';
@@ -437,51 +439,68 @@ function renderIngredients() {
   }
 }
 
-/**
- * Render a full Monday-to-Sunday weekly menu for the selected week.
- */
-function renderWeeklyView(weekId) {
-  const weekSelect = document.getElementById('weekSelect');
+function renderLunchWeek(weekKey) {
   const weeklyMenuGrid = document.getElementById('weeklyMenuGrid');
-  if (!weeklyMenuGrid || !weekSelect) return;
-
-  const week = weekId || weekSelect.value;
-  const activeTab = document.querySelector('.tab-button.active')?.id || 'unknown';
-  const weeklyContainer = document.getElementById('weeklyMenuGrid');
-
-  console.log('[WeeklyView] activeTab:', activeTab);
-  console.log('[WeeklyView] selectedWeek:', week);
-  console.log('[WeeklyView] weekly container element:', weeklyContainer);
-
-  // STEP 1: forced render proof that should always appear.
-  weeklyMenuGrid.innerHTML = `<div class="weekly-proof-heading">Weekly View Loaded — Week ${week}</div>`;
+  weeklyMenuGrid.innerHTML = '';
 
   dayOrder.forEach(day => {
-    const proofCard = document.createElement('section');
-    proofCard.className = 'day-card';
-    proofCard.dataset.day = day;
-    proofCard.innerHTML = `
-      <h2 class="day-card-title">${day}</h2>
-      <div class="day-card-slot-value" data-day-content="${day}">Test render OK</div>
-    `;
-    weeklyMenuGrid.appendChild(proofCard);
-  });
+    const dayData = getLunchMenu(weekKey, day);
+    const dayCard = document.createElement('section');
+    dayCard.className = 'day-card';
 
-  // STEP 2: replace placeholders with real data when available.
-  if (!menuOverviewData || !menuOverviewData[week]) {
-    return;
-  }
-
-  dayOrder.forEach(day => {
-    const dayData = getMenuFor(week, day);
-    console.log(`[WeeklyView] ${day} menu data:`, dayData);
-
-    const dayCard = weeklyMenuGrid.querySelector(`[data-day="${day}"]`);
-    if (!dayCard) return;
+    const title = document.createElement('h2');
+    title.className = 'day-card-title';
+    title.textContent = day;
+    dayCard.appendChild(title);
 
     const slots = document.createElement('div');
     slots.className = 'day-card-slots';
-    categoryTitles.forEach(category => {
+    lunchCategoryConfig.forEach(category => {
+      const slot = document.createElement('div');
+      slot.className = 'day-card-slot';
+
+      const label = document.createElement('div');
+      label.className = 'day-card-slot-label';
+      label.textContent = category.label;
+
+      const value = document.createElement('div');
+      value.className = 'day-card-slot-value';
+      value.textContent = dayData[category.key] || 'Menu item not set';
+
+      slot.appendChild(label);
+      slot.appendChild(value);
+      slots.appendChild(slot);
+    });
+
+    dayCard.appendChild(slots);
+    weeklyMenuGrid.appendChild(dayCard);
+  });
+}
+
+function renderWeeklyView(weekId) {
+  const weeklyMenuGrid = document.getElementById('weeklyMenuGrid');
+  if (!weeklyMenuGrid) return;
+
+  const week = weekId || document.getElementById('weekSelect').value;
+  if (currentMeal === 'lunch') {
+    renderLunchWeek(week);
+    return;
+  }
+
+  weeklyMenuGrid.innerHTML = '';
+  dayOrder.forEach(day => {
+    const dayData = getMenuFor(week, day);
+    const dayCard = document.createElement('section');
+    dayCard.className = 'day-card';
+
+    const title = document.createElement('h2');
+    title.className = 'day-card-title';
+    title.textContent = day;
+    dayCard.appendChild(title);
+
+    const slots = document.createElement('div');
+    slots.className = 'day-card-slots';
+    dinnerCategoryTitles.forEach(category => {
       const slot = document.createElement('div');
       slot.className = 'day-card-slot';
 
@@ -498,28 +517,9 @@ function renderWeeklyView(weekId) {
       slots.appendChild(slot);
     });
 
-    const proofText = dayCard.querySelector(`[data-day-content="${day}"]`);
-    if (proofText) {
-      proofText.replaceWith(slots);
-    } else {
-      dayCard.appendChild(slots);
-    }
+    dayCard.appendChild(slots);
+    weeklyMenuGrid.appendChild(dayCard);
   });
-}
-
-function getMenuFor(weekKey, dayName) {
-  const weekData = menuOverviewData && menuOverviewData[weekKey];
-  if (!weekData) return {};
-
-  const aliases = WEEKLY_DAY_KEYS[dayName] || [dayName];
-  for (let i = 0; i < aliases.length; i += 1) {
-    const alias = aliases[i];
-    if (Object.prototype.hasOwnProperty.call(weekData, alias)) {
-      return weekData[alias] || {};
-    }
-  }
-
-  return {};
 }
 
 function setDaySelectorVisibility(showDaySelector) {
@@ -531,10 +531,6 @@ function setDaySelectorVisibility(showDaySelector) {
   daySelect.disabled = !showDaySelector;
 }
 
-/**
- * Switch between recipe and ingredients views.
- * @param {string} tab Either 'recipes', 'ingredients', or 'weekly'
- */
 function switchTab(tab) {
   const recipeTab = document.getElementById('recipeTab');
   const ingredientTab = document.getElementById('ingredientTab');
@@ -552,30 +548,41 @@ function switchTab(tab) {
     recipesView.classList.add('active');
     weeklyView.classList.remove('active');
     setDaySelectorVisibility(true);
+  } else if (tab === 'ingredients') {
+    recipeTab.classList.remove('active');
+    ingredientTab.classList.add('active');
+    weeklyTab.classList.remove('active');
+    recipesView.classList.add('active');
+    weeklyView.classList.remove('active');
+    setDaySelectorVisibility(true);
   } else {
-    if (tab === 'ingredients') {
-      recipeTab.classList.remove('active');
-      ingredientTab.classList.add('active');
-      weeklyTab.classList.remove('active');
-      recipesView.classList.add('active');
-      weeklyView.classList.remove('active');
-      setDaySelectorVisibility(true);
-    } else {
-      recipeTab.classList.remove('active');
-      ingredientTab.classList.remove('active');
-      weeklyTab.classList.add('active');
-      recipesView.classList.remove('active');
-      weeklyView.classList.add('active');
-      setDaySelectorVisibility(false);
-      const weekSelect = document.getElementById('weekSelect');
-      renderWeeklyView(weekSelect.value);
-    }
+    recipeTab.classList.remove('active');
+    ingredientTab.classList.remove('active');
+    weeklyTab.classList.add('active');
+    recipesView.classList.remove('active');
+    weeklyView.classList.add('active');
+    setDaySelectorVisibility(false);
+    renderWeeklyView(document.getElementById('weekSelect').value);
   }
 }
 
-/**
- * Attach event listeners to controls and tabs.
- */
+function setMeal(meal) {
+  currentMeal = meal;
+  const dinnerMealTab = document.getElementById('dinnerMealTab');
+  const lunchMealTab = document.getElementById('lunchMealTab');
+
+  dinnerMealTab.classList.toggle('active', meal === 'dinner');
+  lunchMealTab.classList.toggle('active', meal === 'lunch');
+  document.body.classList.toggle('lunch-mode', meal === 'lunch');
+
+  renderMenuRow();
+  renderIngredients();
+
+  if (document.getElementById('weeklyView').classList.contains('active')) {
+    renderWeeklyView(document.getElementById('weekSelect').value);
+  }
+}
+
 function attachEvents() {
   const weekSelect = document.getElementById('weekSelect');
   const daySelect = document.getElementById('daySelect');
@@ -583,44 +590,37 @@ function attachEvents() {
   const recipeTab = document.getElementById('recipeTab');
   const ingredientTab = document.getElementById('ingredientTab');
   const weeklyTab = document.getElementById('weeklyTab');
-  weekSelect.addEventListener('change', () => {
-    const weeklyView = document.getElementById('weeklyView');
-    const isWeeklyActive = weeklyView.classList.contains('active');
+  const dinnerMealTab = document.getElementById('dinnerMealTab');
+  const lunchMealTab = document.getElementById('lunchMealTab');
 
+  weekSelect.addEventListener('change', () => {
+    const isWeeklyActive = document.getElementById('weeklyView').classList.contains('active');
     if (!isWeeklyActive) {
       populateDays();
       renderMenuRow();
       renderIngredients();
     }
-
     renderWeeklyView(weekSelect.value);
   });
+
   daySelect.addEventListener('change', () => {
     renderMenuRow();
     renderIngredients();
   });
-  searchInput.addEventListener('input', () => {
-    renderIngredients();
-  });
-  recipeTab.addEventListener('click', () => {
-    switchTab('recipes');
-  });
-  ingredientTab.addEventListener('click', () => {
-    switchTab('ingredients');
-  });
-  weeklyTab.addEventListener('click', () => {
-    switchTab('weekly');
-  });
+
+  searchInput.addEventListener('input', renderIngredients);
+  recipeTab.addEventListener('click', () => switchTab('recipes'));
+  ingredientTab.addEventListener('click', () => switchTab('ingredients'));
+  weeklyTab.addEventListener('click', () => switchTab('weekly'));
+  dinnerMealTab.addEventListener('click', () => setMeal('dinner'));
+  lunchMealTab.addEventListener('click', () => setMeal('lunch'));
 }
 
-// Initialize the dashboard once the DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   if (!menuOverviewData || !Object.keys(menuOverviewData).length) {
     console.error('Menu overview data failed to load; week/day dropdowns cannot be populated.');
     return;
   }
-
-  const weekSelect = document.getElementById('weekSelect');
 
   populateWeeks();
   populateDays();
@@ -631,10 +631,8 @@ document.addEventListener('DOMContentLoaded', () => {
     console.error('Failed to build ingredient checker data:', error);
   }
 
-  renderMenuRow();
-  renderIngredients();
-  renderWeeklyView(weekSelect.value);
+  setMeal('dinner');
+  renderWeeklyView(document.getElementById('weekSelect').value);
   attachEvents();
-  // Set default to recipe tab
   switchTab('recipes');
 });

@@ -11,6 +11,7 @@
   <!-- Append placeholder categories for Weeks 3 and 4 -->
   <script src="data_add.js"></script>
   <script src="menu_overview.js"></script>
+  <script src="lunch_menu_data.js"></script>
   <!-- Recipe details for all dishes -->
   <script src="recipes.js"></script>
   <!-- Additional recipe details for Weeks 3 and 4 -->
@@ -27,6 +28,11 @@
 
   <main class="dashboard-shell">
     <section class="controls-row" aria-label="Dashboard filters and views">
+      <nav class="meal-tabs" aria-label="Meal type">
+        <button id="dinnerMealTab" class="tab-button active">Dinner</button>
+        <button id="lunchMealTab" class="tab-button">Lunch</button>
+      </nav>
+
       <nav class="top-tabs" aria-label="Dashboard views">
         <button id="recipeTab" class="tab-button active">Recipe Search</button>
         <button id="ingredientTab" class="tab-button">Ingredients Checker</button>
