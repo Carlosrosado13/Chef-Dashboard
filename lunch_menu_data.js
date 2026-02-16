@@ -1,18 +1,18 @@
 const lunchMenuData = {
   "Week 1": {
     "Monday": {
-      "SOUP": "ROASTED TOMATO BASIL                        (GF/DF)",
-      "SALAD": "ARUGULA / SHAVED FENNEL / CITRUS VINAIGRETTE                (GF/DF)",
-      "MAIN 1": "ROASTED CHICKEN BREAST / WHITE WINE MUSTARD SAUCE                       (GF)",
-      "MAIN 2": "BEEF BOLOGNESE / CAVATAPPI / PARMESAN",
-      "DESSERT": "CHOCOLATE MOUSSE CAKE"
+      "SOUP": "Roasted Tomato Basil Soup",
+      "SALAD": "Arugula, Shaved Fennel & Citrus",
+      "MAIN 1": "Grilled Lemon-Herb Chicken",
+      "MAIN 2": "Seared Salmon with Dill Yogurt",
+      "DESSERT": "Chocolate Pot de Crème"
     },
     "Tuesday": {
-      "SOUP": "CREAM OF MUSHROOM  (GF)",
-      "SALAD": "MIXED GREENS / PEAR / CANDIED WALNUT           (GF/DF)",
-      "MAIN 1": "TURKEY CLUB / CHIPOTLE MAYO / TOMATO / BACON / LETTUCE",
-      "MAIN 2": "CHICKEN SOUVLAKI / TZATZIKI / GREEK SALAD / PITA",
-      "DESSERT": "LEMON MERINGUE TART"
+      "SOUP": "Cream of Mushroom",
+      "SALAD": "Mixed Greens, Pear & Walnuts",
+      "MAIN 1": "Beef Bourguignon",
+      "MAIN 2": "Ricotta Gnocchi",
+      "DESSERT": "Vanilla Bean Panna Cotta"
     },
     "Wednesday": {
       "SOUP": "SWEET CORN CHOWDER   (GF)",
