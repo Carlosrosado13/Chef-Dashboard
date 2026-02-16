@@ -35,6 +35,7 @@ function resolveGlobalValue(...names) {
     if (name === 'menuOverviewData' && typeof menuOverviewData !== 'undefined') return menuOverviewData;
     if (name === 'lunchMenuData' && typeof lunchMenuData !== 'undefined') return lunchMenuData;
     if (name === 'recipesData' && typeof recipesData !== 'undefined') return recipesData;
+    if (name === 'lunchRecipesWeek1' && typeof lunchRecipesWeek1 !== 'undefined') return lunchRecipesWeek1;
   }
 
   return undefined;
@@ -48,6 +49,7 @@ const mealData = {
   lunch: lunchMenuDataStore
 };
 const recipesStore = resolveGlobalValue('recipesData') || null;
+const lunchRecipesStore = resolveGlobalValue('lunchRecipesWeek1') || {};
 
 let selectedDish = null;
 let selectedMeal = 'dinner';
@@ -245,17 +247,60 @@ function validateIngredientCheckerData() {
   }
 }
 
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderLunchRecipeCard(recipe) {
+  if (!recipe) return '<section class="recipe-card"><p>Recipe not added yet</p></section>';
+
+  const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+  const ingredientRows = ingredients.length
+    ? ingredients
+      .map(item => `<tr><td>${escapeHtml(item.item)}</td><td>${escapeHtml(item.qty50)}</td><td>${escapeHtml(item.qty100)}</td><td>${escapeHtml(item.qty150)}</td></tr>`)
+      .join('')
+    : '<tr><td colspan="4">Recipe not added yet</td></tr>';
+
+  const yields = Array.isArray(recipe.yields) ? recipe.yields : ['50', '100', '150'];
+  const notes = recipe.notes ? `<p><strong>Notes:</strong> ${escapeHtml(recipe.notes)}</p>` : '';
+
+  return `<section class="recipe-card"><h3>${escapeHtml(recipe.title || 'Recipe not added yet')}</h3><p><strong>Yields:</strong> ${escapeHtml(yields.join(', '))}</p><table><thead><tr><th>Ingredient</th><th>${escapeHtml(yields[0])}</th><th>${escapeHtml(yields[1])}</th><th>${escapeHtml(yields[2])}</th></tr></thead><tbody>${ingredientRows}</tbody></table><h4>Instructions</h4><pre>${escapeHtml(recipe.instructions || 'Recipe not added yet')}</pre>${notes}</section>`;
+}
+
+function renderLunchRecipesByDay(week, day) {
+  const container = lunchRecipesStore[`Week ${week}`] || lunchRecipesStore[String(week)] || {};
+  const dayRecipes = container[day] || {};
+  const slots = [
+    { key: 'soup', label: 'Soup' },
+    { key: 'salad', label: 'Salad' },
+    { key: 'saladDressing', label: 'Salad Dressing / Vinaigrette' },
+    { key: 'main1', label: 'Main 1' },
+    { key: 'main2', label: 'Main 2' },
+    { key: 'dessert', label: 'Dessert' }
+  ];
+
+  return slots
+    .map(slot => `<article><h2>${slot.label}</h2>${renderLunchRecipeCard(dayRecipes[slot.key])}</article>`)
+    .join('');
+}
+
 function renderRecipe() {
   const recipeDetails = document.getElementById('recipeDetails');
   if (!recipeDetails) return;
 
-  if (selectedMeal === 'lunch') {
-    recipeDetails.innerHTML = '<p>Lunch recipes are coming next — for now this view shows menu items only.</p>';
-    return;
-  }
-
   const weekSelect = document.getElementById('weekSelect');
   const week = weekSelect.value;
+  const day = document.getElementById('daySelect').value;
+
+  if (selectedMeal === 'lunch') {
+    recipeDetails.innerHTML = renderLunchRecipesByDay(week, day);
+    return;
+  }
 
   if (!selectedDish || /^(add alternative|n\/a)$/i.test(selectedDish)) {
     recipeDetails.innerHTML = '<p>Select a dish to view its recipe.</p>';
