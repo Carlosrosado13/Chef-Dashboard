@@ -182,11 +182,11 @@ const lunchMenuData = {
       "DESSERT": "CARAMEL APPLE CRISP"
     },
     "Friday": {
-      "SOUP": "NEW ENGLAND CLAM CHOWDER  (GF)",
+      "SOUP": "New England Clam Chowder",
       "SALAD": "BIBB / AVOCADO / HERB VINAIGRETTE                 (GF/DF)",
-      "MAIN 1": "FISH AND CHIPS",
-      "MAIN 2": "ROAST BEEF DIP",
-      "DESSERT": "STRAWBERRY SHORTCAKE"
+      "MAIN 1": "Fish & Chips",
+      "MAIN 2": "Roast Beef Dip",
+      "DESSERT": "Strawberry Shortcake"
     },
     "Saturday": {
       "SOUP": "GARLIC AND POTATO  (GF)",
