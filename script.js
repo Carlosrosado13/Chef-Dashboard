@@ -256,8 +256,115 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-function renderLunchRecipeCard(recipe) {
-  if (!recipe) return '<section class="recipe-card"><p>Recipe not added yet</p></section>';
+function normalizeLunchRecipeTitle(value) {
+  if (!value) return '';
+  return String(value)
+    .replace(/\((?:\s*(?:GF|DF|VG|V|VEG|NF|SF)(?:\s*\/\s*(?:GF|DF|VG|V|VEG|NF|SF))*\s*)\)/gi, ' ')
+    .replace(/\s*\/\s*/g, ' / ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeInstructionValue(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map(line => String(line || '').trim())
+      .filter(Boolean)
+      .join('\n');
+  }
+  return String(value || '').trim();
+}
+
+function isMissingInstructionValue(value) {
+  const normalized = normalizeInstructionValue(value).toLowerCase();
+  return !normalized || normalized === 'recipe added.' || normalized === 'recipe not added yet';
+}
+
+function extractLunchDressingTitle(saladTitle) {
+  const clean = String(saladTitle || '').trim();
+  if (!clean) return '';
+
+  const slashParts = clean.split('/').map(part => part.trim()).filter(Boolean);
+  if (slashParts.length > 1) {
+    return slashParts[slashParts.length - 1];
+  }
+
+  const parenMatch = clean.match(/\(([^)]+dressing[^)]*)\)/i);
+  if (parenMatch) return parenMatch[1].trim();
+  return '';
+}
+
+function buildLunchSlotExpectedTitle(slot, dayMenu) {
+  if (!dayMenu) return '';
+  if (slot.key === 'soup') return dayMenu.SOUP || '';
+  if (slot.key === 'salad') return dayMenu.SALAD || '';
+  if (slot.key === 'main1') return dayMenu['MAIN 1'] || '';
+  if (slot.key === 'main2') return dayMenu['MAIN 2'] || '';
+  if (slot.key === 'dessert') return dayMenu.DESSERT || '';
+  if (slot.key === 'saladDressing') return extractLunchDressingTitle(dayMenu.SALAD || '');
+  return '';
+}
+
+function scoreTitleWordOverlap(left, right) {
+  const leftWords = normalizeLunchRecipeTitle(left).split(/\s+/).filter(Boolean);
+  const rightWords = normalizeLunchRecipeTitle(right).split(/\s+/).filter(Boolean);
+  if (!leftWords.length || !rightWords.length) return 0;
+  const common = leftWords.filter(word => rightWords.includes(word));
+  return common.length / Math.min(leftWords.length, rightWords.length);
+}
+
+function findLunchRecipeByTitle(dayRecipes, expectedTitle) {
+  if (!dayRecipes || !expectedTitle) return null;
+  const target = normalizeLunchRecipeTitle(expectedTitle);
+  if (!target) return null;
+
+  let best = null;
+  let bestScore = 0;
+
+  Object.keys(dayRecipes).forEach(key => {
+    const candidate = dayRecipes[key];
+    if (!candidate || typeof candidate !== 'object') return;
+    const title = candidate.title || '';
+    const normalizedTitle = normalizeLunchRecipeTitle(title);
+    if (!normalizedTitle) return;
+    if (normalizedTitle === target) {
+      best = candidate;
+      bestScore = 1;
+      return;
+    }
+    const score = scoreTitleWordOverlap(normalizedTitle, target);
+    if (score > bestScore) {
+      best = candidate;
+      bestScore = score;
+    }
+  });
+
+  return bestScore >= 0.5 ? best : null;
+}
+
+function resolveLunchRecipeForSlot({ week, day, slot, dayRecipes, dayMenu }) {
+  const expectedTitle = buildLunchSlotExpectedTitle(slot, dayMenu) || slot.label;
+  let recipe = dayRecipes[slot.key] || null;
+
+  if (!recipe && slot.key === 'saladDressing') {
+    recipe = dayRecipes.dressing || dayRecipes.vinaigrette || dayRecipes.side || null;
+  }
+
+  const hasUsableInstructions = recipe && !isMissingInstructionValue(recipe.instructions);
+  if (!recipe || !hasUsableInstructions) {
+    const byTitle = findLunchRecipeByTitle(dayRecipes, expectedTitle);
+    if (byTitle && !isMissingInstructionValue(byTitle.instructions)) recipe = byTitle;
+  }
+
+  return { recipe, expectedTitle, context: { week, day, meal: 'lunch' } };
+}
+
+function renderLunchRecipeCard(recipe, expectedTitle, context) {
+  if (!recipe) {
+    console.warn('Missing recipe instructions for:', expectedTitle || 'Unknown lunch recipe', context);
+    return '<section class="recipe-card"><p>Recipe not added yet</p></section>';
+  }
 
   const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
   const ingredientRows = ingredients.length
@@ -268,13 +375,20 @@ function renderLunchRecipeCard(recipe) {
 
   const yields = Array.isArray(recipe.yields) ? recipe.yields : ['50', '100', '150'];
   const notes = recipe.notes ? `<p><strong>Notes:</strong> ${escapeHtml(recipe.notes)}</p>` : '';
+  const instructionsText = normalizeInstructionValue(recipe.instructions);
+  const safeInstructions = isMissingInstructionValue(instructionsText) ? 'Recipe not added yet' : instructionsText;
 
-  return `<section class="recipe-card"><h3>${escapeHtml(recipe.title || 'Recipe not added yet')}</h3><p><strong>Yields:</strong> ${escapeHtml(yields.join(', '))}</p><table><thead><tr><th>Ingredient</th><th>${escapeHtml(yields[0])}</th><th>${escapeHtml(yields[1])}</th><th>${escapeHtml(yields[2])}</th></tr></thead><tbody>${ingredientRows}</tbody></table><h4>Instructions</h4><pre>${escapeHtml(recipe.instructions || 'Recipe not added yet')}</pre>${notes}</section>`;
+  if (safeInstructions === 'Recipe not added yet') {
+    console.warn('Missing recipe instructions for:', expectedTitle || recipe.title, context);
+  }
+
+  return `<section class="recipe-card"><h3>${escapeHtml(recipe.title || 'Recipe not added yet')}</h3><p><strong>Yields:</strong> ${escapeHtml(yields.join(', '))}</p><table><thead><tr><th>Ingredient</th><th>${escapeHtml(yields[0])}</th><th>${escapeHtml(yields[1])}</th><th>${escapeHtml(yields[2])}</th></tr></thead><tbody>${ingredientRows}</tbody></table><h4>Instructions</h4><pre>${escapeHtml(safeInstructions)}</pre>${notes}</section>`;
 }
 
 function renderLunchRecipesByDay(week, day) {
   const container = lunchRecipesStore[`Week ${week}`] || lunchRecipesStore[String(week)] || {};
   const dayRecipes = container[day] || {};
+  const dayMenu = getMealMenu('lunch', week, day);
   const slots = [
     { key: 'soup', label: 'Soup' },
     { key: 'salad', label: 'Salad' },
@@ -285,7 +399,10 @@ function renderLunchRecipesByDay(week, day) {
   ];
 
   return slots
-    .map(slot => `<article><h2>${slot.label}</h2>${renderLunchRecipeCard(dayRecipes[slot.key])}</article>`)
+    .map(slot => {
+      const resolved = resolveLunchRecipeForSlot({ week, day, slot, dayRecipes, dayMenu });
+      return `<article><h2>${slot.label}</h2>${renderLunchRecipeCard(resolved.recipe, resolved.expectedTitle, resolved.context)}</article>`;
+    })
     .join('');
 }
 
