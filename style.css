@@ -75,6 +75,7 @@ body {
   margin-bottom: var(--space-4);
 }
 
+.meal-tabs,
 .top-tabs {
   display: inline-flex;
   gap: var(--space-2);
@@ -380,6 +381,22 @@ body {
   }
 }
 
+.lunch-mode .menu-item-block {
+  cursor: default;
+}
+
+.lunch-mode .menu-item-block:hover {
+  transform: none;
+  border-color: var(--border-soft);
+  box-shadow: none;
+}
+
+.lunch-mode .menu-item-block.selected {
+  border-color: var(--border-soft);
+  background: linear-gradient(160deg, #fff, #f8fbff);
+  box-shadow: none;
+}
+
 @media (max-width: 680px) {
   .dashboard-shell {
     padding: var(--space-3);
@@ -389,6 +406,7 @@ body {
     padding: var(--space-3);
   }
 
+  .meal-tabs,
   .top-tabs {
     width: 100%;
     justify-content: space-between;
