@@ -16,11 +16,32 @@ const lunchCategoryConfig = [
   { key: 'DESSERT', label: 'Dessert' }
 ];
 
-const ingredientDataStore = globalThis.menuData || { menu: [] };
-const menuData = {
-  dinner: globalThis.dinnerMenuData || globalThis.menuOverviewData || {},
-  lunch: globalThis.lunchMenuData || {}
+function resolveGlobalValue(...names) {
+  for (let i = 0; i < names.length; i += 1) {
+    const name = names[i];
+    if (Object.prototype.hasOwnProperty.call(globalThis, name) && globalThis[name]) {
+      return globalThis[name];
+    }
+  }
+
+  for (let i = 0; i < names.length; i += 1) {
+    const name = names[i];
+    if (name === 'menuData' && typeof menuData !== 'undefined') return menuData;
+    if (name === 'dinnerMenuData' && typeof dinnerMenuData !== 'undefined') return dinnerMenuData;
+    if (name === 'menuOverviewData' && typeof menuOverviewData !== 'undefined') return menuOverviewData;
+    if (name === 'lunchMenuData' && typeof lunchMenuData !== 'undefined') return lunchMenuData;
+    if (name === 'recipesData' && typeof recipesData !== 'undefined') return recipesData;
+  }
+
+  return undefined;
+}
+
+const ingredientDataStore = resolveGlobalValue('menuData') || { menu: [] };
+const mealData = {
+  dinner: resolveGlobalValue('dinnerMenuData', 'menuOverviewData') || {},
+  lunch: resolveGlobalValue('lunchMenuData') || {}
 };
+const recipesStore = resolveGlobalValue('recipesData') || null;
 
 let selectedDish = null;
 let selectedMeal = 'dinner';
@@ -146,18 +167,22 @@ function findRecipeKey(weekRecipes, dishName) {
 }
 
 function buildIngredientCheckerData() {
-  if (!menuOverviewData || !recipesData) return;
+  const dinnerOverview = resolveGlobalValue('menuOverviewData') || mealData.dinner;
+  if (!dinnerOverview || !recipesStore) {
+    console.warn('Ingredient checker skipped: menu overview and/or recipes data are unavailable.');
+    return;
+  }
   const categoryLookup = buildCategoryLookup();
   const generatedMenu = [];
 
-  Object.keys(menuOverviewData).forEach(weekKey => {
+  Object.keys(dinnerOverview).forEach(weekKey => {
     const weekNumber = Number(weekKey);
-    const weekDays = menuOverviewData[weekKey];
+    const weekDays = dinnerOverview[weekKey];
     Object.keys(weekDays).forEach(day => {
       const categories = { produce: [], protein: [], dairy: [], dry: [], other: [] };
       const seenByCategory = { produce: new Set(), protein: new Set(), dairy: new Set(), dry: new Set(), other: new Set() };
       const dayMenu = weekDays[day];
-      const weekRecipes = recipesData[weekKey] || {};
+      const weekRecipes = recipesStore[weekKey] || {};
 
       Object.keys(dayMenu).forEach(menuCategory => {
         const dishName = dayMenu[menuCategory];
@@ -231,7 +256,7 @@ function renderRecipe() {
     return;
   }
 
-  const weekRecipes = recipesData && recipesData[week];
+  const weekRecipes = recipesStore && recipesStore[week];
   if (!weekRecipes) {
     recipeDetails.innerHTML = '<p>Recipe data not available for this week.</p>';
     return;
@@ -258,7 +283,7 @@ function handleDishClick(elem) {
 }
 
 function getWeekDataForMeal(meal) {
-  return menuData[meal] || {};
+  return mealData[meal] || {};
 }
 
 function normalizeWeekKey(weekKey) {
@@ -626,10 +651,44 @@ function attachEvents() {
   lunchMealTab.addEventListener('click', () => setMeal('lunch'));
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  if (!menuData.dinner || !Object.keys(menuData.dinner).length) {
-    console.error('Dinner menu data failed to load; week/day dropdowns cannot be populated.');
+function requireElement(id) {
+  const element = document.getElementById(id);
+  if (!element) {
+    throw new Error(`Initialization failed: required element #${id} was not found.`);
+  }
+  return element;
+}
+
+function validateRequiredSelectors() {
+  [
+    'weekSelect',
+    'daySelect',
+    'dayFilterGroup',
+    'menuRow',
+    'recipeDetails',
+    'ingredientsContainer',
+    'searchInput',
+    'recipeTab',
+    'ingredientTab',
+    'weeklyTab',
+    'dinnerMealTab',
+    'lunchMealTab',
+    'recipesView',
+    'weeklyView',
+    'weeklyMenuGrid'
+  ].forEach(requireElement);
+}
+
+function init() {
+  validateRequiredSelectors();
+
+  if (!mealData.dinner || !Object.keys(mealData.dinner).length) {
+    console.warn('Dinner menu data failed to load; week/day dropdowns cannot be populated.');
     return;
+  }
+
+  if (!mealData.lunch || !Object.keys(mealData.lunch).length) {
+    console.warn('Lunch menu data failed to load; lunch view may not render menu cards.');
   }
 
   populateWeeks(selectedMeal);
@@ -638,7 +697,7 @@ document.addEventListener('DOMContentLoaded', () => {
   try {
     buildIngredientCheckerData();
   } catch (error) {
-    console.error('Failed to build ingredient checker data:', error);
+    console.warn('Failed to build ingredient checker data:', error);
   }
 
   validateDinnerSpotChecks();
@@ -646,4 +705,12 @@ document.addEventListener('DOMContentLoaded', () => {
   renderWeeklyView(document.getElementById('weekSelect').value);
   attachEvents();
   switchTab('recipes');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    init();
+  } catch (error) {
+    console.error(error.message || error);
+  }
 });
