@@ -41,9 +41,11 @@ function resolveGlobalValue(...names) {
 }
 
 const ingredientDataStore = resolveGlobalValue('menuData') || { menu: [] };
+const dinnerMenuDataStore = resolveGlobalValue('dinnerMenuData', 'menuOverviewData') || {};
+const lunchMenuDataStore = resolveGlobalValue('lunchMenuData') || {};
 const mealData = {
-  dinner: resolveGlobalValue('menuOverviewData', 'dinnerMenuData') || {},
-  lunch: resolveGlobalValue('lunchMenuData') || {}
+  dinner: dinnerMenuDataStore,
+  lunch: lunchMenuDataStore
 };
 const recipesStore = resolveGlobalValue('recipesData') || null;
 
@@ -171,7 +173,7 @@ function findRecipeKey(weekRecipes, dishName) {
 }
 
 function buildIngredientCheckerData() {
-  const dinnerOverview = resolveGlobalValue('menuOverviewData') || mealData.dinner;
+  const dinnerOverview = dinnerMenuDataStore;
   if (!dinnerOverview || !recipesStore) {
     console.warn('Ingredient checker skipped: menu overview and/or recipes data are unavailable.');
     return;
@@ -286,12 +288,24 @@ function handleDishClick(elem) {
   renderRecipe();
 }
 
+function getSelectedMealData(meal) {
+  const data = meal === 'dinner' ? dinnerMenuDataStore : lunchMenuDataStore;
+  return data || {};
+}
+
 function getWeekDataForMeal(meal) {
-  return mealData[meal] || {};
+  const data = meal ? getSelectedMealData(meal) : getSelectedMealData(selectedMeal);
+  return data || {};
 }
 
 function normalizeWeekKey(weekKey) {
   return /^Week\s+\d+$/i.test(String(weekKey)) ? String(weekKey) : `Week ${weekKey}`;
+}
+
+function getWeekDataContainer(meal, weekKey) {
+  const data = getSelectedMealData(meal);
+  const numericWeekKey = String(weekKey).replace(/[^\d]/g, '');
+  return data[normalizeWeekKey(weekKey)] || data[numericWeekKey] || data[String(weekKey)] || {};
 }
 
 function populateWeeks(meal) {
@@ -324,7 +338,7 @@ function populateDays() {
   const daySelect = document.getElementById('daySelect');
   daySelect.innerHTML = '';
   const week = weekSelect.value;
-  const weekData = getWeekDataForMeal(selectedMeal)[normalizeWeekKey(week)] || {};
+  const weekData = getWeekDataContainer(selectedMeal, week);
   const days = dayOrder.filter(day => {
     const aliases = WEEKLY_DAY_KEYS[day] || [day];
     return aliases.some(alias => Object.prototype.hasOwnProperty.call(weekData, alias));
@@ -338,7 +352,7 @@ function populateDays() {
 }
 
 function getMealMenu(meal, weekKey, dayName) {
-  const weekData = getWeekDataForMeal(meal)[normalizeWeekKey(weekKey)];
+  const weekData = getWeekDataContainer(meal, weekKey);
   if (!weekData) return {};
 
   const aliases = WEEKLY_DAY_KEYS[dayName] || [dayName];
