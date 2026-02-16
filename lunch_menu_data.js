@@ -8,46 +8,46 @@ const lunchMenuData = {
       "DESSERT": "Chocolate Pot de Crème"
     },
     "Tuesday": {
-      "SOUP": "Cream of Mushroom",
-      "SALAD": "Mixed Greens, Pear & Walnuts",
+      "SOUP": "Cream of Mushroom Soup",
+      "SALAD": "Mixed Greens, Pear & Candied Walnuts",
       "MAIN 1": "Beef Bourguignon",
-      "MAIN 2": "Ricotta Gnocchi",
+      "MAIN 2": "Ricotta Gnocchi, Brown Butter Sage",
       "DESSERT": "Vanilla Bean Panna Cotta"
     },
     "Wednesday": {
-      "SOUP": "SWEET CORN CHOWDER   (GF)",
-      "SALAD": "CUCUMBER / DILL YOGURT                                             (GF)",
-      "MAIN 1": "SALMON CAKES / HERB AIOLI",
-      "MAIN 2": "VEAL PARMESAN / MARINARA / MOZZARELLA",
-      "DESSERT": "BANANA CREAM PIE"
+      "SOUP": "Sweet Corn Chowder",
+      "SALAD": "Cucumber, Dill & Yogurt Salad",
+      "MAIN 1": "Teriyaki Glazed Salmon",
+      "MAIN 2": "Pork Tenderloin with Apple Jus",
+      "DESSERT": "Lemon Olive Oil Cake"
     },
     "Thursday": {
-      "SOUP": "ROASTED RED PEPPER    (GF/DF)",
-      "SALAD": "CAESAR SALAD",
-      "MAIN 1": "BEEF STROGANOFF / EGG NOODLES",
-      "MAIN 2": "CHICKEN SCHNITZEL / LEMON",
-      "DESSERT": "CARAMEL APPLE CRISP"
+      "SOUP": "Roasted Red Pepper Soup",
+      "SALAD": "Classic Caesar Salad (House Dressing)",
+      "MAIN 1": "Chicken Piccata",
+      "MAIN 2": "Grilled Portobello with Romesco",
+      "DESSERT": "Espresso Crème Brûlée"
     },
     "Friday": {
-      "SOUP": "NEW ENGLAND CLAM CHODER                          (GF)",
-      "SALAD": "BIBB LETTUCE / AVOCADO / HERB VINAIGRETTE                   (GF/DF)",
-      "MAIN 1": "FISH AND CHIPS / TARTAR",
-      "MAIN 2": "ROAST BEEF DIP / AU JUS",
-      "DESSERT": "STRAWBERRY SHORTCAKE"
+      "SOUP": "New England Clam Chowder",
+      "SALAD": "Bibb Lettuce, Avocado & Herb Salad",
+      "MAIN 1": "Pan-Seared Cod, Herb Beurre Blanc",
+      "MAIN 2": "Grilled Chicken Pesto",
+      "DESSERT": "Flourless Chocolate Cake"
     },
     "Saturday": {
-      "SOUP": "GARLIC AND POTATO  (GF)",
-      "SALAD": "SPINACH / STRAWBERRY / BALSAMIC          (GF/DF)",
-      "MAIN 1": "CHICKEN QUESADILLA / SALSA / SOUR CREAM",
-      "MAIN 2": "PORK TENDERLOIN / DIJON PAN SAUCE                       (GF)",
-      "DESSERT": "BLUEBERRY CHEESECAKE"
+      "SOUP": "Garlic & Potato",
+      "SALAD": "Spinach, Strawberry, Balsamic",
+      "MAIN 1": "Shrimp Scampi",
+      "MAIN 2": "Wild Mushroom Risotto",
+      "DESSERT": "Almond Cake with Citrus Glaze"
     },
     "Sunday": {
-      "SOUP": "CHICKEN NOODLE            (DF)",
-      "SALAD": "TOMATO & BURRATA   (GF)",
-      "MAIN 1": "BRAISED BEEF / MUSHROOM GRAVY                              (GF)",
-      "MAIN 2": "GRILLED CHEESE / TOMATO SOUP",
-      "DESSERT": "CARROT CAKE"
+      "SOUP": "Chicken Noodle",
+      "SALAD": "Tomato & Burrata",
+      "MAIN 1": "Roast Chicken with Pan Jus",
+      "MAIN 2": "Vegetable Lasagna",
+      "DESSERT": "Apple Tart"
     }
   },
   "Week 2": {
