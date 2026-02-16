@@ -1,15 +1,11 @@
 // Chef Dashboard Script
 
-const dinnerCategoryTitles = [
-  'Appetizer 1',
-  'Appetizer 2',
-  'Elevated',
-  'Traditional',
-  'Alternative',
-  'Veg 1',
-  'Veg 2',
-  'Starch',
-  'Dessert'
+const dinnerCategoryConfig = [
+  { key: 'SOUP', label: 'Soup' },
+  { key: 'SALAD', label: 'Salad' },
+  { key: 'MAIN 1', label: 'Main 1' },
+  { key: 'MAIN 2', label: 'Main 2' },
+  { key: 'DESSERT', label: 'Dessert' }
 ];
 
 const lunchCategoryConfig = [
@@ -20,8 +16,14 @@ const lunchCategoryConfig = [
   { key: 'DESSERT', label: 'Dessert' }
 ];
 
+const ingredientDataStore = globalThis.menuData || { menu: [] };
+const menuData = {
+  dinner: globalThis.dinnerMenuData || globalThis.menuOverviewData || {},
+  lunch: globalThis.lunchMenuData || {}
+};
+
 let selectedDish = null;
-let currentMeal = 'dinner';
+let selectedMeal = 'dinner';
 
 const ingredientCategories = ['produce', 'protein', 'dairy', 'dry', 'other'];
 const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -108,8 +110,8 @@ function parseIngredientsFromRecipeHtml(recipeHtml) {
 
 function buildCategoryLookup() {
   const lookup = {};
-  if (!menuData || !Array.isArray(menuData.menu)) return lookup;
-  menuData.menu.forEach(entry => {
+  if (!ingredientDataStore || !Array.isArray(ingredientDataStore.menu)) return lookup;
+  ingredientDataStore.menu.forEach(entry => {
     if (!entry || !entry.categories) return;
     ingredientCategories.forEach(category => {
       const items = entry.categories[category] || [];
@@ -177,17 +179,17 @@ function buildIngredientCheckerData() {
     });
   });
 
-  menuData.menu = generatedMenu;
+  ingredientDataStore.menu = generatedMenu;
   validateIngredientCheckerData();
 }
 
 function validateIngredientCheckerData() {
-  const weeks = new Set(menuData.menu.map(entry => entry.week));
+  const weeks = new Set(ingredientDataStore.menu.map(entry => entry.week));
   let totalIngredients = 0;
   const emptyWeeks = [];
 
   weeks.forEach(week => {
-    const weekEntries = menuData.menu.filter(entry => entry.week === week);
+    const weekEntries = ingredientDataStore.menu.filter(entry => entry.week === week);
     const seen = new Set();
     let count = 0;
     weekEntries.forEach(entry => {
@@ -216,7 +218,7 @@ function renderRecipe() {
   const recipeDetails = document.getElementById('recipeDetails');
   if (!recipeDetails) return;
 
-  if (currentMeal === 'lunch') {
+  if (selectedMeal === 'lunch') {
     recipeDetails.innerHTML = '<p>Lunch recipes are coming next — for now this view shows menu items only.</p>';
     return;
   }
@@ -244,7 +246,7 @@ function renderRecipe() {
 }
 
 function handleDishClick(elem) {
-  if (currentMeal === 'lunch') return;
+  if (selectedMeal === 'lunch') return;
   const dishName = elem.dataset.dish;
   if (!dishName || dishName === 'Add alternative') return;
 
@@ -255,17 +257,37 @@ function handleDishClick(elem) {
   renderRecipe();
 }
 
-function populateWeeks() {
+function getWeekDataForMeal(meal) {
+  return menuData[meal] || {};
+}
+
+function normalizeWeekKey(weekKey) {
+  return /^Week\s+\d+$/i.test(String(weekKey)) ? String(weekKey) : `Week ${weekKey}`;
+}
+
+function populateWeeks(meal) {
   const weekSelect = document.getElementById('weekSelect');
+  const currentWeek = weekSelect.value;
   weekSelect.innerHTML = '';
-  Object.keys(menuOverviewData)
-    .sort((a, b) => Number(a) - Number(b))
-    .forEach(week => {
+
+  const mealWeeks = getWeekDataForMeal(meal);
+  Object.keys(mealWeeks)
+    .map(key => ({
+      source: key,
+      number: Number(String(key).replace(/[^\d]/g, ''))
+    }))
+    .filter(item => Number.isFinite(item.number) && item.number > 0)
+    .sort((a, b) => a.number - b.number)
+    .forEach(item => {
       const option = document.createElement('option');
-      option.value = week;
-      option.textContent = `Week ${week}`;
+      option.value = String(item.number);
+      option.textContent = `Week ${item.number}`;
       weekSelect.appendChild(option);
     });
+
+  if (currentWeek && Array.prototype.some.call(weekSelect.options, option => option.value === currentWeek)) {
+    weekSelect.value = currentWeek;
+  }
 }
 
 function populateDays() {
@@ -273,8 +295,11 @@ function populateDays() {
   const daySelect = document.getElementById('daySelect');
   daySelect.innerHTML = '';
   const week = weekSelect.value;
-  const weekData = menuOverviewData[week] || {};
-  const days = dayOrder.filter(day => Object.prototype.hasOwnProperty.call(weekData, day));
+  const weekData = getWeekDataForMeal(selectedMeal)[normalizeWeekKey(week)] || {};
+  const days = dayOrder.filter(day => {
+    const aliases = WEEKLY_DAY_KEYS[day] || [day];
+    return aliases.some(alias => Object.prototype.hasOwnProperty.call(weekData, alias));
+  });
   days.forEach(day => {
     const option = document.createElement('option');
     option.value = day;
@@ -283,8 +308,8 @@ function populateDays() {
   });
 }
 
-function getMenuFor(weekKey, dayName) {
-  const weekData = menuOverviewData && menuOverviewData[weekKey];
+function getMealMenu(meal, weekKey, dayName) {
+  const weekData = getWeekDataForMeal(meal)[normalizeWeekKey(weekKey)];
   if (!weekData) return {};
 
   const aliases = WEEKLY_DAY_KEYS[dayName] || [dayName];
@@ -295,29 +320,24 @@ function getMenuFor(weekKey, dayName) {
   return {};
 }
 
-function getLunchMenu(weekKey, dayName) {
-  if (!lunchMenuData) return {};
-
-  const normalizedWeek = /^Week\s+\d+$/i.test(weekKey) ? weekKey : `Week ${weekKey}`;
-  const weekData = lunchMenuData[normalizedWeek];
-  if (!weekData) return {};
-
-  const aliases = WEEKLY_DAY_KEYS[dayName] || [dayName];
-  for (let i = 0; i < aliases.length; i += 1) {
-    const alias = aliases[i];
-    if (Object.prototype.hasOwnProperty.call(weekData, alias)) return weekData[alias] || {};
-  }
-
-  return {};
+function getCategoryConfig(meal) {
+  return meal === 'dinner' ? dinnerCategoryConfig : lunchCategoryConfig;
 }
 
-function renderLunchDay(weekKey, dayName) {
+function getDefaultDishText(meal) {
+  return meal === 'dinner' ? 'Add alternative' : 'Menu item not set';
+}
+
+function renderDay(meal, weekKey, dayName) {
   const menuRow = document.getElementById('menuRow');
-  const lunchDay = getLunchMenu(weekKey, dayName);
-  menuRow.innerHTML = '';
+  const dayData = getMealMenu(meal, weekKey, dayName);
+  const categories = getCategoryConfig(meal);
+  const defaultDishText = getDefaultDishText(meal);
 
+  menuRow.innerHTML = '';
   selectedDish = null;
-  lunchCategoryConfig.forEach(category => {
+
+  categories.forEach(category => {
     const itemBlock = document.createElement('div');
     itemBlock.className = 'menu-item-block';
 
@@ -327,67 +347,44 @@ function renderLunchDay(weekKey, dayName) {
 
     const dish = document.createElement('div');
     dish.className = 'dish-name';
-    dish.textContent = lunchDay[category.key] || 'Menu item not set';
-
-    itemBlock.appendChild(label);
-    itemBlock.appendChild(dish);
-    menuRow.appendChild(itemBlock);
-  });
-
-  renderRecipe();
-}
-
-function renderMenuRow() {
-  const week = document.getElementById('weekSelect').value;
-  const day = document.getElementById('daySelect').value;
-
-  if (currentMeal === 'lunch') {
-    renderLunchDay(week, day);
-    return;
-  }
-
-  const menuRow = document.getElementById('menuRow');
-  menuRow.innerHTML = '';
-  const dayData = menuOverviewData[week] && menuOverviewData[week][day];
-  selectedDish = null;
-
-  dinnerCategoryTitles.forEach(cat => {
-    const itemBlock = document.createElement('div');
-    itemBlock.className = 'menu-item-block';
-
-    const label = document.createElement('div');
-    label.className = 'category-label';
-    label.textContent = cat;
-
-    const dish = document.createElement('div');
-    dish.className = 'dish-name';
-    const dishText = dayData && typeof dayData[cat] !== 'undefined' && dayData[cat] !== null
-      ? dayData[cat]
-      : 'Add alternative';
+    const dishText = dayData[category.key] || defaultDishText;
     dish.textContent = dishText;
 
     itemBlock.dataset.dish = dishText;
     itemBlock.appendChild(label);
     itemBlock.appendChild(dish);
-    itemBlock.addEventListener('click', () => handleDishClick(itemBlock));
+    if (meal === 'dinner') {
+      itemBlock.addEventListener('click', () => handleDishClick(itemBlock));
+    }
     menuRow.appendChild(itemBlock);
   });
+
+  if (meal !== 'dinner') {
+    renderRecipe();
+    return;
+  }
 
   const blocks = document.querySelectorAll('.menu-item-block');
   for (let i = 0; i < blocks.length; i += 1) {
     const block = blocks[i];
-    if (block.dataset.dish && block.dataset.dish !== 'Add alternative') {
+    if (block.dataset.dish && block.dataset.dish !== defaultDishText) {
       handleDishClick(block);
       break;
     }
   }
 }
 
+function renderMenuRow() {
+  const week = document.getElementById('weekSelect').value;
+  const day = document.getElementById('daySelect').value;
+  renderDay(selectedMeal, week, day);
+}
+
 function renderIngredients() {
   const ingredientsContainer = document.getElementById('ingredientsContainer');
   ingredientsContainer.innerHTML = '';
 
-  if (currentMeal === 'lunch') {
+  if (selectedMeal === 'lunch') {
     const msg = document.createElement('p');
     msg.className = 'no-results';
     msg.textContent = 'Lunch ingredients checker coming next — we’ll add recipes first.';
@@ -398,7 +395,7 @@ function renderIngredients() {
   const week = Number(document.getElementById('weekSelect').value);
   const day = document.getElementById('daySelect').value;
   const searchTerm = document.getElementById('searchInput').value.trim().toLowerCase();
-  const entry = menuData.menu.find(item => item.week === week && item.day === day);
+  const entry = ingredientDataStore.menu.find(item => item.week === week && item.day === day);
 
   if (!entry || !entry.categories) {
     const msg = document.createElement('p');
@@ -439,12 +436,16 @@ function renderIngredients() {
   }
 }
 
-function renderLunchWeek(weekKey) {
+function renderWeek(meal, weekKey) {
   const weeklyMenuGrid = document.getElementById('weeklyMenuGrid');
-  weeklyMenuGrid.innerHTML = '';
+  if (!weeklyMenuGrid) return;
 
+  const categories = getCategoryConfig(meal);
+  const defaultDishText = getDefaultDishText(meal);
+
+  weeklyMenuGrid.innerHTML = '';
   dayOrder.forEach(day => {
-    const dayData = getLunchMenu(weekKey, day);
+    const dayData = getMealMenu(meal, weekKey, day);
     const dayCard = document.createElement('section');
     dayCard.className = 'day-card';
 
@@ -455,7 +456,7 @@ function renderLunchWeek(weekKey) {
 
     const slots = document.createElement('div');
     slots.className = 'day-card-slots';
-    lunchCategoryConfig.forEach(category => {
+    categories.forEach(category => {
       const slot = document.createElement('div');
       slot.className = 'day-card-slot';
 
@@ -465,7 +466,7 @@ function renderLunchWeek(weekKey) {
 
       const value = document.createElement('div');
       value.className = 'day-card-slot-value';
-      value.textContent = dayData[category.key] || 'Menu item not set';
+      value.textContent = dayData[category.key] || defaultDishText;
 
       slot.appendChild(label);
       slot.appendChild(value);
@@ -478,48 +479,8 @@ function renderLunchWeek(weekKey) {
 }
 
 function renderWeeklyView(weekId) {
-  const weeklyMenuGrid = document.getElementById('weeklyMenuGrid');
-  if (!weeklyMenuGrid) return;
-
   const week = weekId || document.getElementById('weekSelect').value;
-  if (currentMeal === 'lunch') {
-    renderLunchWeek(week);
-    return;
-  }
-
-  weeklyMenuGrid.innerHTML = '';
-  dayOrder.forEach(day => {
-    const dayData = getMenuFor(week, day);
-    const dayCard = document.createElement('section');
-    dayCard.className = 'day-card';
-
-    const title = document.createElement('h2');
-    title.className = 'day-card-title';
-    title.textContent = day;
-    dayCard.appendChild(title);
-
-    const slots = document.createElement('div');
-    slots.className = 'day-card-slots';
-    dinnerCategoryTitles.forEach(category => {
-      const slot = document.createElement('div');
-      slot.className = 'day-card-slot';
-
-      const label = document.createElement('div');
-      label.className = 'day-card-slot-label';
-      label.textContent = category;
-
-      const value = document.createElement('div');
-      value.className = 'day-card-slot-value';
-      value.textContent = dayData[category] || 'Add alternative';
-
-      slot.appendChild(label);
-      slot.appendChild(value);
-      slots.appendChild(slot);
-    });
-
-    dayCard.appendChild(slots);
-    weeklyMenuGrid.appendChild(dayCard);
-  });
+  renderWeek(selectedMeal, week);
 }
 
 function setDaySelectorVisibility(showDaySelector) {
@@ -567,7 +528,7 @@ function switchTab(tab) {
 }
 
 function setMeal(meal) {
-  currentMeal = meal;
+  selectedMeal = meal;
   const dinnerMealTab = document.getElementById('dinnerMealTab');
   const lunchMealTab = document.getElementById('lunchMealTab');
 
@@ -575,12 +536,61 @@ function setMeal(meal) {
   lunchMealTab.classList.toggle('active', meal === 'lunch');
   document.body.classList.toggle('lunch-mode', meal === 'lunch');
 
+  populateWeeks(selectedMeal);
+  populateDays();
+
   renderMenuRow();
   renderIngredients();
 
   if (document.getElementById('weeklyView').classList.contains('active')) {
     renderWeeklyView(document.getElementById('weekSelect').value);
   }
+}
+
+function normalizeMenuValue(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function validateDinnerSpotChecks() {
+  const isDevMode = ['localhost', '127.0.0.1', ''].includes(window.location.hostname);
+  if (!isDevMode) return;
+
+  const checks = [
+    {
+      week: '1',
+      day: 'Monday',
+      expected: {
+        SOUP: 'Roasted Tomato Basil',
+        SALAD: 'Arugula / Shaved Fennel / Citrus Vinaigrette',
+        'MAIN 1': 'Grilled Lemon & Herb Chicken Breast',
+        'MAIN 2': 'Seared Salmon / Dill Yogurt',
+        DESSERT: 'Chocolate Pot de Creme'
+      }
+    },
+    {
+      week: '4',
+      day: 'Friday',
+      expected: {
+        SOUP: 'Corn Chowder',
+        SALAD: 'Bibb Lettuce / Radish',
+        'MAIN 1': 'Crab Cakes',
+        'MAIN 2': 'Beef Pastrami Sandwich',
+        DESSERT: 'Chocolate Layer Cake'
+      }
+    }
+  ];
+
+  checks.forEach(check => {
+    const actual = getMealMenu('dinner', check.week, check.day);
+    Object.keys(check.expected).forEach(key => {
+      if (normalizeMenuValue(actual[key]) !== normalizeMenuValue(check.expected[key])) {
+        console.warn(
+          `[Dinner data check] Week ${check.week} ${check.day} ${key} mismatch. ` +
+          `Expected "${check.expected[key]}" but got "${actual[key] || ''}".`
+        );
+      }
+    });
+  });
 }
 
 function attachEvents() {
@@ -617,12 +627,12 @@ function attachEvents() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  if (!menuOverviewData || !Object.keys(menuOverviewData).length) {
-    console.error('Menu overview data failed to load; week/day dropdowns cannot be populated.');
+  if (!menuData.dinner || !Object.keys(menuData.dinner).length) {
+    console.error('Dinner menu data failed to load; week/day dropdowns cannot be populated.');
     return;
   }
 
-  populateWeeks();
+  populateWeeks(selectedMeal);
   populateDays();
 
   try {
@@ -631,6 +641,7 @@ document.addEventListener('DOMContentLoaded', () => {
     console.error('Failed to build ingredient checker data:', error);
   }
 
+  validateDinnerSpotChecks();
   setMeal('dinner');
   renderWeeklyView(document.getElementById('weekSelect').value);
   attachEvents();
