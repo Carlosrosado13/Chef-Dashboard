@@ -120,7 +120,6 @@ function collectIngredientsByWeek(dataObject) {
   }
 
   return htmlStrings;
-}
 
 function extractIngredientsFromRecipeHtml(recipeHtml) {
   const ingredients = [];
