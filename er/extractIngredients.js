@@ -22,61 +22,10 @@ const CATEGORIES = [
   'Spices',
   'Alcohol',
   'Dairy',
+  'Uncategorized',
 ];
 
-function loadJsData(filePath) {
-  const code = fs.readFileSync(filePath, 'utf8');
-
-  // Sandbox that supports both CommonJS (module.exports) and "global" vars
-  const sandbox = {
-    module: { exports: {} },
-    exports: {},
-    require,
-    console,
-  };
-  vm.createContext(sandbox);
-
-  // Run the file in the sandbox
-  vm.runInContext(code, sandbox, { filename: filePath });
-
-  // 1) If the file exports normally (module.exports = ...)
-  if (sandbox.module && sandbox.module.exports && Object.keys(sandbox.module.exports).length) {
-    return sandbox.module.exports;
-  }
-
-  // 2) If the file attaches the object as a global var (e.g., const recipes = {...})
-  // Try common names used in these projects:
-  const candidates = [
-    sandbox.recipes,
-    sandbox.recipesLunch,
-    sandbox.recipeslunch,
-    sandbox.lunchRecipes,
-    sandbox.data,
-  ].filter(Boolean);
-
-  if (candidates.length) return candidates[0];
-
-  // 3) Last resort: pick the biggest plain object sitting on sandbox
-  const objs = Object.values(sandbox).filter(
-    (v) => v && typeof v === 'object' && !Array.isArray(v)
-  );
-  objs.sort((a, b) => Object.keys(b).length - Object.keys(a).length);
-
-  if (objs.length) return objs[0];
-
-  throw new Error(`Could not find exported data in: ${filePath}`);
-}
-
-// Load both datasets
-const dinnerData = loadJsData(DINNER_FILE);
-const lunchData  = loadJsData(LUNCH_FILE);
-
-// If your script expects "weeks" at the top level, merge them:
-const dataObject = { ...dinnerData, ...lunchData };
-
-// Quick sanity check (optional)
-console.log('Dinner keys sample:', Object.keys(dinnerData).slice(0, 5));
-console.log('Lunch keys sample:', Object.keys(lunchData).slice(0, 5));
+const ingredientStats = new Map();
 
 function emptyWeekCounts() {
   return { 1: 0, 2: 0, 3: 0, 4: 0 };
@@ -103,59 +52,154 @@ function evaluateFileIntoSandbox(filePath, sandbox) {
   source = source.replace(/^\uFEFF/, '');
   source = source.replace(/\bexport\s+const\s+/g, 'const ');
   source = source.replace(/\bexport\s+default\s+/g, '');
-
   vm.runInContext(source, sandbox, { filename: path.basename(filePath) });
 }
+
+function loadDinnerData() {
+  const runtime = { module: { exports: {} }, exports: {} };
+  runtime.globalThis = runtime;
+  runtime.window = runtime;
+  runtime.self = runtime;
+  const sandbox = vm.createContext(runtime);
+
+  evaluateFileIntoSandbox(DINNER_FILE, sandbox);
+
+  if (!runtime.recipesData || typeof runtime.recipesData !== 'object') {
+    throw new Error('Could not find dinner data on globalThis.recipesData');
+  }
+
+  return runtime.recipesData;
+}
+
+function loadLunchData() {
+  const runtime = { module: { exports: {} }, exports: {} };
+  runtime.globalThis = runtime;
+  runtime.window = runtime;
+  runtime.self = runtime;
+  const sandbox = vm.createContext(runtime);
+
+  evaluateFileIntoSandbox(LUNCH_FILE, sandbox);
+
+  const fromModule = runtime.module && runtime.module.exports && runtime.module.exports.recipesLunchData;
+  const fromGlobal = runtime.recipesLunchData;
+  const lunchData = fromModule || fromGlobal;
+
+  if (!lunchData || typeof lunchData !== 'object') {
+    throw new Error('Could not find lunch data via module.exports.recipesLunchData or globalThis.recipesLunchData');
+  }
+
+  return lunchData;
+}
+
+function assertWeekLikeData(datasetName, data) {
+  const keys = Object.keys(data);
+  if (!keys.length) {
+    throw new Error(`${datasetName} data is empty`);
+  }
+
+  const numericKeys = keys.filter((k) => Number.isFinite(Number(k)));
+  if (!numericKeys.length) {
+    throw new Error(`${datasetName} data does not have numeric week keys`);
+  }
+
+  const sampleWeek = data[numericKeys[0]];
+  if (!sampleWeek || typeof sampleWeek !== 'object') {
+    throw new Error(`${datasetName} week ${numericKeys[0]} is not an object`);
+  }
+
+  const hasHtmlRecipe = Object.values(sampleWeek).some((v) => typeof v === 'string' && v.includes('<'));
+  if (!hasHtmlRecipe) {
+    throw new Error(`${datasetName} sample week ${numericKeys[0]} has no recipe HTML strings`);
+  }
+}
+
 function categorize(nameRaw) {
   const name = nameRaw.toLowerCase();
-
   const rules = [
-    { cat: "Greens", keys: ["lettuce", "arugula", "spinach", "kale", "romaine", "mixed greens"] },
-    { cat: "Protein", keys: ["chicken", "beef", "pork", "lamb", "turkey", "sausage", "shrimp", "salmon", "fish", "haddock", "egg"] },
-    { cat: "Dairy", keys: ["milk", "cream", "cheese", "butter", "yogurt", "parmesan", "feta", "mozzarella"] },
-    { cat: "Fruit", keys: ["apple", "berries", "berry", "lemon", "orange", "mango", "pear"] },
-    { cat: "Vegetable", keys: ["onion", "garlic", "carrot", "zucchini", "tomato", "pepper", "mushroom", "potato", "eggplant", "cucumber", "leeks", "shallot"] },
-    { cat: "Starch", keys: ["rice", "pasta", "bread", "polenta", "gnocchi", "potato"] },
-    { cat: "Dry", keys: ["flour", "cornmeal", "cornstarch", "sugar", "cocoa", "breadcrumbs", "bread crumbs"] },
-    { cat: "Spices", keys: ["salt", "pepper", "paprika", "cumin", "thyme", "rosemary", "chili", "red pepper flakes"] },
-    { cat: "Alcohol", keys: ["wine", "brandy", "beer", "rum"] },
-    { cat: "Can", keys: ["canned", "tomato paste", "beans"] },
-    { cat: "Frozen", keys: ["frozen"] },
+    { cat: 'Greens', keys: ['lettuce', 'arugula', 'spinach', 'kale', 'romaine', 'mixed greens'] },
+    { cat: 'Protein', keys: ['chicken', 'beef', 'pork', 'lamb', 'turkey', 'sausage', 'shrimp', 'salmon', 'fish', 'haddock', 'egg'] },
+    { cat: 'Dairy', keys: ['milk', 'cream', 'cheese', 'butter', 'yogurt', 'parmesan', 'feta', 'mozzarella'] },
+    { cat: 'Fruit', keys: ['apple', 'berries', 'berry', 'lemon', 'orange', 'mango', 'pear'] },
+    { cat: 'Vegetable', keys: ['onion', 'garlic', 'carrot', 'zucchini', 'tomato', 'pepper', 'mushroom', 'potato', 'eggplant', 'cucumber', 'leeks', 'shallot'] },
+    { cat: 'Starch', keys: ['rice', 'pasta', 'bread', 'polenta', 'gnocchi', 'potato'] },
+    { cat: 'Dry', keys: ['flour', 'cornmeal', 'cornstarch', 'sugar', 'cocoa', 'breadcrumbs', 'bread crumbs'] },
+    { cat: 'Spices', keys: ['salt', 'pepper', 'paprika', 'cumin', 'thyme', 'rosemary', 'chili', 'red pepper flakes'] },
+    { cat: 'Alcohol', keys: ['wine', 'brandy', 'beer', 'rum'] },
+    { cat: 'Can', keys: ['canned', 'tomato paste', 'beans'] },
+    { cat: 'Frozen', keys: ['frozen'] },
   ];
 
-  const ingredientStats = new Map();
+  for (const rule of rules) {
+    if (rule.keys.some((key) => name.includes(key))) {
+      return rule.cat;
+    }
+  }
+  return 'Uncategorized';
+}
 
 function addIngredientUse(ingredient, weekNum) {
   if (!ingredient || !weekNum) return;
 
   const key = ingredient.toLowerCase();
-
   if (!ingredientStats.has(key)) {
     ingredientStats.set(key, {
       name: ingredient,
       category: categorize(ingredient),
       weeks: emptyWeekCounts(),
+      total: 0,
     });
   }
 
-  ingredientStats.get(key).weeks[weekNum] += 1;
-}
-
-  for (const r of rules) {
-    if (r.keys.some(k => name.includes(k))) return r.cat;
+  const entry = ingredientStats.get(key);
+  if (!entry.weeks[weekNum]) {
+    entry.weeks[weekNum] = 0;
   }
-  return "Uncategorized";
+  entry.weeks[weekNum] += 1;
+  entry.total += 1;
 }
-function collectIngredientsByWeek(dataObject) {
-  if (!dataObject || typeof dataObject !== 'object') return;
 
+function extractIngredientsFromRecipeHtml(recipeHtml) {
+  const ingredients = [];
+  let cursor = 0;
+
+  while (cursor < recipeHtml.length) {
+    const trStart = recipeHtml.indexOf('<tr', cursor);
+    if (trStart === -1) break;
+
+    const trEnd = recipeHtml.indexOf('</tr>', trStart);
+    if (trEnd === -1) break;
+
+    const rowHtml = recipeHtml.slice(trStart, trEnd);
+    const tdStart = rowHtml.indexOf('<td');
+    if (tdStart !== -1) {
+      const tdOpenEnd = rowHtml.indexOf('>', tdStart);
+      const tdClose = tdOpenEnd === -1 ? -1 : rowHtml.indexOf('</td>', tdOpenEnd + 1);
+
+      if (tdOpenEnd !== -1 && tdClose !== -1) {
+        const firstCellRaw = rowHtml
+          .slice(tdOpenEnd + 1, tdClose)
+          .replace(/<[^>]*>/g, ' ');
+        const ingredient = normalizeIngredient(firstCellRaw);
+
+        if (ingredient && ingredient.toLowerCase() !== 'ingredient') {
+          ingredients.push(ingredient);
+        }
+      }
+    }
+
+    cursor = trEnd + 5;
+  }
+
+  return ingredients;
+}
+
+function collectIngredientsByWeek(dataObject) {
   for (const [weekKey, weekRecipes] of Object.entries(dataObject)) {
     const weekNum = Number(weekKey);
-    if (!weekNum || typeof weekRecipes !== 'object') continue;
+    if (!weekNum || !weekRecipes || typeof weekRecipes !== 'object') continue;
 
     for (const recipeHtml of Object.values(weekRecipes)) {
       if (typeof recipeHtml !== 'string') continue;
-
       const ingredients = extractIngredientsFromRecipeHtml(recipeHtml);
       for (const ingredient of ingredients) {
         addIngredientUse(ingredient, weekNum);
@@ -164,62 +208,31 @@ function collectIngredientsByWeek(dataObject) {
   }
 }
 
-  for (const weekRecipes of Object.values(dataObject)) {
-    if (!weekRecipes || typeof weekRecipes !== 'object') continue;
-    for (const recipeHtml of Object.values(weekRecipes)) {
-      if (typeof recipeHtml === 'string') {
-        htmlStrings.push(recipeHtml);
-      }
-    }
-  }
-
-  return htmlStrings;
-
-function extractIngredientsFromRecipeHtml(recipeHtml) {
-  const ingredients = [];
-  const tbodyBlocks = recipeHtml.match(/<tbody[\s\S]*?<\/tbody>/gi) || [];
-
-  for (const tbody of tbodyBlocks) {
-    const rows = tbody.match(/<tr[\s\S]*?<\/tr>/gi) || [];
-    for (const row of rows) {
-      const firstCellMatch = row.match(/<td\b[^>]*>([\s\S]*?)<\/td>/i);
-      if (!firstCellMatch) continue;
-
-      const ingredient = normalizeIngredient(firstCellMatch[1]);
-      if (!ingredient) continue;
-      if (ingredient.toLowerCase() === 'ingredient') continue;
-
-      ingredients.push(ingredient);
-    }
-  }
-
-  return ingredients;
-}
-
-async function writeWorkbook(uniqueIngredients) {
+async function writeWorkbook() {
   const workbook = new ExcelJS.Workbook();
 
   const ingredientsSheet = workbook.addWorksheet('Ingredients');
-ingredientsSheet.columns = [
-  { header: 'Ingredient', key: 'ingredient', width: 45 },
-  { header: 'Category', key: 'category', width: 20 },
-  { header: 'Week 1', key: 'week1', width: 10 },
-  { header: 'Week 2', key: 'week2', width: 10 },
-  { header: 'Week 3', key: 'week3', width: 10 },
-  { header: 'Week 4', key: 'week4', width: 10 },
-];
+  ingredientsSheet.columns = [
+    { header: 'Ingredient', key: 'ingredient', width: 45 },
+    { header: 'Category', key: 'category', width: 20 },
+    { header: 'Week 1', key: 'week1', width: 10 },
+    { header: 'Week 2', key: 'week2', width: 10 },
+    { header: 'Week 3', key: 'week3', width: 10 },
+    { header: 'Week 4', key: 'week4', width: 10 },
+  ];
   ingredientsSheet.views = [{ state: 'frozen', ySplit: 1 }];
 
-  for (const { name, category, weeks } of ingredientStats.values()) {
-  ingredientsSheet.addRow({
-    ingredient: name,
-    category,
-    week1: weeks[1],
-    week2: weeks[2],
-    week3: weeks[3],
-    week4: weeks[4],
-  });
-}
+  const sorted = Array.from(ingredientStats.values()).sort((a, b) => a.name.localeCompare(b.name));
+  for (const { name, category, weeks } of sorted) {
+    ingredientsSheet.addRow({
+      ingredient: name,
+      category,
+      week1: weeks[1] || 0,
+      week2: weeks[2] || 0,
+      week3: weeks[3] || 0,
+      week4: weeks[4] || 0,
+    });
+  }
 
   const categoriesSheet = workbook.addWorksheet('Categories');
   categoriesSheet.getColumn(1).width = 22;
@@ -227,11 +240,12 @@ ingredientsSheet.columns = [
     categoriesSheet.addRow([category]);
   }
 
-  for (let row = 2; row <= 9999; row += 1) {
+  const lastIngredientRow = Math.max(2, ingredientsSheet.rowCount);
+  for (let row = 2; row <= lastIngredientRow; row += 1) {
     ingredientsSheet.getCell(`B${row}`).dataValidation = {
       type: 'list',
       allowBlank: true,
-      formulae: ['=Categories!$A$1:$A$11'],
+      formulae: [`=Categories!$A$1:$A$${CATEGORIES.length}`],
       showErrorMessage: true,
       errorTitle: 'Invalid Category',
       error: 'Please select a category from the dropdown list.',
@@ -243,45 +257,27 @@ ingredientsSheet.columns = [
 }
 
 async function main() {
-  const runtime = { module: { exports: {} }, exports: {} };
-  runtime.globalThis = runtime;
-  runtime.window = runtime;
-  runtime.self = runtime;
-  const sandbox = vm.createContext(runtime);
+  const dinnerData = loadDinnerData();
+  const lunchData = loadLunchData();
 
-  evaluateFileIntoSandbox(DINNER_FILE, sandbox);
-  evaluateFileIntoSandbox(LUNCH_FILE, sandbox);
+  assertWeekLikeData('Dinner', dinnerData);
+  assertWeekLikeData('Lunch', lunchData);
 
-  const dinnerData = runtime.recipesData;
-  const lunchData = runtime.recipesDataLunch || runtime.recipesLunchData;
-
-  if (!dinnerData) {
-    throw new Error('Could not find dinner data on globalThis.recipesData');
-  }
-  if (!lunchData) {
-    throw new Error('Could not find lunch data on globalThis.recipesDataLunch or globalThis.recipesLunchData');
-  }
+  console.log('Dinner keys sample:', Object.keys(dinnerData).slice(0, 5));
+  console.log('Lunch keys sample:', Object.keys(lunchData).slice(0, 5));
 
   collectIngredientsByWeek(dinnerData);
   collectIngredientsByWeek(lunchData);
 
-  const uniqueMap = new Map();
-  for (const ingredient of allIngredients) {
-    const key = ingredient.toLowerCase();
-    if (!uniqueMap.has(key)) {
-      uniqueMap.set(key, ingredient);
-    }
-  }
+  await writeWorkbook();
 
-  const uniqueIngredients = Array.from(uniqueMap.values());
-  await writeWorkbook(uniqueIngredients);
-
-  console.log(`Total ingredients found: ${allIngredients.length}`);
-  console.log(`Unique ingredient count: ${uniqueIngredients.length}`);
+  const totalIngredients = Array.from(ingredientStats.values()).reduce((sum, entry) => sum + entry.total, 0);
+  console.log(`Total ingredients found: ${totalIngredients}`);
+  console.log(`Unique ingredient count: ${ingredientStats.size}`);
+  console.log(`Wrote workbook: ${OUTPUT_FILE}`);
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
+  console.error(error instanceof Error ? error.stack || error.message : String(error));
   process.exitCode = 1;
-  
 });
