@@ -1,0 +1,11 @@
+{
+  "name": "chef-dashboard",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "extract:ingredients": "node scripts/extract_all_ingredients_to_excel.js"
+  },
+  "devDependencies": {
+    "exceljs": "^4.4.0"
+  }
+}
