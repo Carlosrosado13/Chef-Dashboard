@@ -48,7 +48,28 @@ function evaluateFileIntoSandbox(filePath, sandbox) {
 
   vm.runInContext(source, sandbox, { filename: path.basename(filePath) });
 }
+function categorize(nameRaw) {
+  const name = nameRaw.toLowerCase();
 
+  const rules = [
+    { cat: "Greens", keys: ["lettuce", "arugula", "spinach", "kale", "romaine", "mixed greens"] },
+    { cat: "Protein", keys: ["chicken", "beef", "pork", "lamb", "turkey", "sausage", "shrimp", "salmon", "fish", "haddock", "egg"] },
+    { cat: "Dairy", keys: ["milk", "cream", "cheese", "butter", "yogurt", "parmesan", "feta", "mozzarella"] },
+    { cat: "Fruit", keys: ["apple", "berries", "berry", "lemon", "orange", "mango", "pear"] },
+    { cat: "Vegetable", keys: ["onion", "garlic", "carrot", "zucchini", "tomato", "pepper", "mushroom", "potato", "eggplant", "cucumber", "leeks", "shallot"] },
+    { cat: "Starch", keys: ["rice", "pasta", "bread", "polenta", "gnocchi", "potato"] },
+    { cat: "Dry", keys: ["flour", "cornmeal", "cornstarch", "sugar", "cocoa", "breadcrumbs", "bread crumbs"] },
+    { cat: "Spices", keys: ["salt", "pepper", "paprika", "cumin", "thyme", "rosemary", "chili", "red pepper flakes"] },
+    { cat: "Alcohol", keys: ["wine", "brandy", "beer", "rum"] },
+    { cat: "Can", keys: ["canned", "tomato paste", "beans"] },
+    { cat: "Frozen", keys: ["frozen"] },
+  ];
+
+  for (const r of rules) {
+    if (r.keys.some(k => name.includes(k))) return r.cat;
+  }
+  return "Uncategorized";
+}
 function collectRecipeHtmlStrings(dataObject) {
   const htmlStrings = [];
   if (!dataObject || typeof dataObject !== 'object') {
@@ -171,4 +192,10 @@ async function main() {
 main().catch((error) => {
   console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
+
+  rows.push({
+  Ingredient: ingredientName,
+  Category: categorize(ingredientName)
+});
+
 });
