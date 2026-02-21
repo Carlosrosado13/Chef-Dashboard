@@ -1,3 +1,4 @@
+// DEPRECATED: Lunch recipes have been consolidated into /recipeslunch.js.
 const lunchRecipesWeek1 = {
   "Week 1": {
     Monday: {

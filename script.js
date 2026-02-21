@@ -35,6 +35,7 @@ function resolveGlobalValue(...names) {
     if (name === 'menuOverviewData' && typeof menuOverviewData !== 'undefined') return menuOverviewData;
     if (name === 'lunchMenuData' && typeof lunchMenuData !== 'undefined') return lunchMenuData;
     if (name === 'recipesData' && typeof recipesData !== 'undefined') return recipesData;
+    if (name === 'recipesLunchData' && typeof recipesLunchData !== 'undefined') return recipesLunchData;
     if (name === 'lunchRecipesWeek1' && typeof lunchRecipesWeek1 !== 'undefined') return lunchRecipesWeek1;
   }
 
@@ -49,7 +50,7 @@ const mealData = {
   lunch: lunchMenuDataStore
 };
 const recipesStore = resolveGlobalValue('recipesData') || null;
-const lunchRecipesStore = resolveGlobalValue('lunchRecipesWeek1') || {};
+const lunchRecipesStore = resolveGlobalValue('recipesLunchData', 'lunchRecipesWeek1') || {};
 
 let selectedDish = null;
 let selectedMeal = 'dinner';
@@ -314,80 +315,41 @@ function scoreTitleWordOverlap(left, right) {
   return common.length / Math.min(leftWords.length, rightWords.length);
 }
 
-function findLunchRecipeByTitle(dayRecipes, expectedTitle) {
-  if (!dayRecipes || !expectedTitle) return null;
+function findLunchRecipeHtmlByTitle(weekRecipes, expectedTitle) {
+  if (!weekRecipes || !expectedTitle) return null;
   const target = normalizeLunchRecipeTitle(expectedTitle);
   if (!target) return null;
 
-  let best = null;
+  let bestKey = null;
   let bestScore = 0;
 
-  Object.keys(dayRecipes).forEach(key => {
-    const candidate = dayRecipes[key];
-    if (!candidate || typeof candidate !== 'object') return;
-    const title = candidate.title || '';
+  Object.keys(weekRecipes).forEach(title => {
     const normalizedTitle = normalizeLunchRecipeTitle(title);
     if (!normalizedTitle) return;
     if (normalizedTitle === target) {
-      best = candidate;
+      bestKey = title;
       bestScore = 1;
       return;
     }
+
     const score = scoreTitleWordOverlap(normalizedTitle, target);
     if (score > bestScore) {
-      best = candidate;
+      bestKey = title;
       bestScore = score;
     }
   });
 
-  return bestScore >= 0.5 ? best : null;
+  return bestScore >= 0.5 ? weekRecipes[bestKey] : null;
 }
 
-function resolveLunchRecipeForSlot({ week, day, slot, dayRecipes, dayMenu }) {
-  const expectedTitle = buildLunchSlotExpectedTitle(slot, dayMenu) || slot.label;
-  let recipe = dayRecipes[slot.key] || null;
-
-  if (!recipe && slot.key === 'saladDressing') {
-    recipe = dayRecipes.dressing || dayRecipes.vinaigrette || null;
-  }
-
-  const hasUsableInstructions = recipe && !isMissingInstructionValue(recipe.instructions);
-  if (!recipe || !hasUsableInstructions) {
-    const byTitle = findLunchRecipeByTitle(dayRecipes, expectedTitle);
-    if (byTitle && !isMissingInstructionValue(byTitle.instructions)) recipe = byTitle;
-  }
-
-  return { recipe, expectedTitle, context: { week, day, meal: 'lunch' } };
-}
-
-function renderLunchRecipeCard(recipe, expectedTitle, context) {
-  if (!recipe) {
-    console.warn('Missing recipe instructions for:', expectedTitle || 'Unknown lunch recipe', context);
-    return '<section class="recipe-card"><p>Recipe not added yet</p></section>';
-  }
-
-  const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
-  const ingredientRows = ingredients.length
-    ? ingredients
-      .map(item => `<tr><td>${escapeHtml(item.item)}</td><td>${escapeHtml(item.qty50)}</td><td>${escapeHtml(item.qty100)}</td><td>${escapeHtml(item.qty150)}</td></tr>`)
-      .join('')
-    : '<tr><td colspan="4">Recipe not added yet</td></tr>';
-
-  const yields = Array.isArray(recipe.yields) ? recipe.yields : ['50', '100', '150'];
-  const notes = recipe.notes ? `<p><strong>Notes:</strong> ${escapeHtml(recipe.notes)}</p>` : '';
-  const instructionsText = normalizeInstructionValue(recipe.instructions);
-  const safeInstructions = isMissingInstructionValue(instructionsText) ? 'Recipe not added yet' : instructionsText;
-
-  if (safeInstructions === 'Recipe not added yet') {
-    console.warn('Missing recipe instructions for:', expectedTitle || recipe.title, context);
-  }
-
-  return `<section class="recipe-card"><h3>${escapeHtml(recipe.title || 'Recipe not added yet')}</h3><p><strong>Yields:</strong> ${escapeHtml(yields.join(', '))}</p><table><thead><tr><th>Ingredient</th><th>${escapeHtml(yields[0])}</th><th>${escapeHtml(yields[1])}</th><th>${escapeHtml(yields[2])}</th></tr></thead><tbody>${ingredientRows}</tbody></table><h4>Instructions</h4><pre>${escapeHtml(safeInstructions)}</pre>${notes}</section>`;
+function renderLunchRecipeCard(recipeHtml, expectedTitle, context) {
+  if (recipeHtml) return recipeHtml;
+  console.warn('Missing lunch recipe for:', expectedTitle || 'Unknown lunch recipe', context);
+  return '<section class="recipe-card"><p>Recipe not added yet</p></section>';
 }
 
 function renderLunchRecipesByDay(week, day) {
-  const container = lunchRecipesStore[`Week ${week}`] || lunchRecipesStore[String(week)] || {};
-  const dayRecipes = container[day] || {};
+  const weekRecipes = lunchRecipesStore[String(week)] || lunchRecipesStore[`Week ${week}`] || {};
   const dayMenu = getMealMenu('lunch', week, day);
   const slots = [
     { key: 'soup', label: 'Soup' },
@@ -400,8 +362,9 @@ function renderLunchRecipesByDay(week, day) {
 
   return slots
     .map(slot => {
-      const resolved = resolveLunchRecipeForSlot({ week, day, slot, dayRecipes, dayMenu });
-      return `<article><h2>${slot.label}</h2>${renderLunchRecipeCard(resolved.recipe, resolved.expectedTitle, resolved.context)}</article>`;
+      const expectedTitle = buildLunchSlotExpectedTitle(slot, dayMenu) || slot.label;
+      const recipeHtml = weekRecipes[expectedTitle] || findLunchRecipeHtmlByTitle(weekRecipes, expectedTitle);
+      return `<article><h2>${slot.label}</h2>${renderLunchRecipeCard(recipeHtml, expectedTitle, { week, day, meal: 'lunch' })}</article>`;
     })
     .join('');
 }

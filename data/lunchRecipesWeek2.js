@@ -1,3 +1,4 @@
+// DEPRECATED: Lunch recipes have been consolidated into /recipeslunch.js.
 (function () {
   const catalog = {
     'Carrot Ginger Soup': {
