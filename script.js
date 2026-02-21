@@ -348,7 +348,7 @@ function resolveLunchRecipeForSlot({ week, day, slot, dayRecipes, dayMenu }) {
   let recipe = dayRecipes[slot.key] || null;
 
   if (!recipe && slot.key === 'saladDressing') {
-    recipe = dayRecipes.dressing || dayRecipes.vinaigrette || dayRecipes.side || null;
+    recipe = dayRecipes.dressing || dayRecipes.vinaigrette || null;
   }
 
   const hasUsableInstructions = recipe && !isMissingInstructionValue(recipe.instructions);
