@@ -120,7 +120,10 @@ async function writeWorkbook(uniqueIngredients) {
   ingredientsSheet.views = [{ state: 'frozen', ySplit: 1 }];
 
   for (const ingredient of uniqueIngredients) {
-    ingredientsSheet.addRow({ ingredient, category: '' });
+    ingredientsSheet.addRow({ 
+      ingredient, 
+      category: categorize(ingredient), 
+    });
   }
 
   const categoriesSheet = workbook.addWorksheet('Categories');
@@ -192,10 +195,5 @@ async function main() {
 main().catch((error) => {
   console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
-
-  rows.push({
-  Ingredient: ingredientName,
-  Category: categorize(ingredientName)
-});
-
+  
 });
