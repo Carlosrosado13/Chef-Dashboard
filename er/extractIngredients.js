@@ -1,0 +1,174 @@
+#!/usr/bin/env node
+
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+const ExcelJS = require('exceljs');
+
+const ROOT_DIR = path.resolve(__dirname, '..');
+const DINNER_FILE = path.join(ROOT_DIR, 'recipes.js');
+const LUNCH_FILE = path.join(ROOT_DIR, 'recipeslunch.js');
+const OUTPUT_FILE = path.join(ROOT_DIR, 'data', 'ingredients_master.xlsx');
+
+const CATEGORIES = [
+  'Protein',
+  'Starch',
+  'Dry',
+  'Can',
+  'Frozen',
+  'Vegetable',
+  'Fruit',
+  'Greens',
+  'Spices',
+  'Alcohol',
+  'Dairy',
+];
+
+function decodeEntities(value) {
+  if (!value) return '';
+  return value
+    .replace(/&amp;/gi, '&')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>');
+}
+
+function normalizeIngredient(value) {
+  const decoded = decodeEntities(value);
+  return decoded.replace(/\s+/g, ' ').trim();
+}
+
+function evaluateFileIntoSandbox(filePath, sandbox) {
+  let source = fs.readFileSync(filePath, 'utf8');
+  source = source.replace(/^\uFEFF/, '');
+  source = source.replace(/\bexport\s+const\s+/g, 'const ');
+  source = source.replace(/\bexport\s+default\s+/g, '');
+
+  vm.runInContext(source, sandbox, { filename: path.basename(filePath) });
+}
+
+function collectRecipeHtmlStrings(dataObject) {
+  const htmlStrings = [];
+  if (!dataObject || typeof dataObject !== 'object') {
+    return htmlStrings;
+  }
+
+  for (const weekRecipes of Object.values(dataObject)) {
+    if (!weekRecipes || typeof weekRecipes !== 'object') continue;
+    for (const recipeHtml of Object.values(weekRecipes)) {
+      if (typeof recipeHtml === 'string') {
+        htmlStrings.push(recipeHtml);
+      }
+    }
+  }
+
+  return htmlStrings;
+}
+
+function extractIngredientsFromRecipeHtml(recipeHtml) {
+  const ingredients = [];
+  const tbodyBlocks = recipeHtml.match(/<tbody[\s\S]*?<\/tbody>/gi) || [];
+
+  for (const tbody of tbodyBlocks) {
+    const rows = tbody.match(/<tr[\s\S]*?<\/tr>/gi) || [];
+    for (const row of rows) {
+      const firstCellMatch = row.match(/<td\b[^>]*>([\s\S]*?)<\/td>/i);
+      if (!firstCellMatch) continue;
+
+      const ingredient = normalizeIngredient(firstCellMatch[1]);
+      if (!ingredient) continue;
+      if (ingredient.toLowerCase() === 'ingredient') continue;
+
+      ingredients.push(ingredient);
+    }
+  }
+
+  return ingredients;
+}
+
+async function writeWorkbook(uniqueIngredients) {
+  const workbook = new ExcelJS.Workbook();
+
+  const ingredientsSheet = workbook.addWorksheet('Ingredients');
+  ingredientsSheet.columns = [
+    { header: 'Ingredient', key: 'ingredient', width: 48 },
+    { header: 'Category', key: 'category', width: 22 },
+  ];
+  ingredientsSheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+  for (const ingredient of uniqueIngredients) {
+    ingredientsSheet.addRow({ ingredient, category: '' });
+  }
+
+  const categoriesSheet = workbook.addWorksheet('Categories');
+  categoriesSheet.getColumn(1).width = 22;
+  for (const category of CATEGORIES) {
+    categoriesSheet.addRow([category]);
+  }
+
+  for (let row = 2; row <= 9999; row += 1) {
+    ingredientsSheet.getCell(`B${row}`).dataValidation = {
+      type: 'list',
+      allowBlank: true,
+      formulae: ['=Categories!$A$1:$A$11'],
+      showErrorMessage: true,
+      errorTitle: 'Invalid Category',
+      error: 'Please select a category from the dropdown list.',
+    };
+  }
+
+  fs.mkdirSync(path.dirname(OUTPUT_FILE), { recursive: true });
+  await workbook.xlsx.writeFile(OUTPUT_FILE);
+}
+
+async function main() {
+  const runtime = { module: { exports: {} }, exports: {} };
+  runtime.globalThis = runtime;
+  runtime.window = runtime;
+  runtime.self = runtime;
+  const sandbox = vm.createContext(runtime);
+
+  evaluateFileIntoSandbox(DINNER_FILE, sandbox);
+  evaluateFileIntoSandbox(LUNCH_FILE, sandbox);
+
+  const dinnerData = runtime.recipesData;
+  const lunchData = runtime.recipesDataLunch || runtime.recipesLunchData;
+
+  if (!dinnerData) {
+    throw new Error('Could not find dinner data on globalThis.recipesData');
+  }
+  if (!lunchData) {
+    throw new Error('Could not find lunch data on globalThis.recipesDataLunch or globalThis.recipesLunchData');
+  }
+
+  const recipeHtmlStrings = [
+    ...collectRecipeHtmlStrings(dinnerData),
+    ...collectRecipeHtmlStrings(lunchData),
+  ];
+
+  const allIngredients = [];
+  for (const recipeHtml of recipeHtmlStrings) {
+    allIngredients.push(...extractIngredientsFromRecipeHtml(recipeHtml));
+  }
+
+  const uniqueMap = new Map();
+  for (const ingredient of allIngredients) {
+    const key = ingredient.toLowerCase();
+    if (!uniqueMap.has(key)) {
+      uniqueMap.set(key, ingredient);
+    }
+  }
+
+  const uniqueIngredients = Array.from(uniqueMap.values());
+  await writeWorkbook(uniqueIngredients);
+
+  console.log(`Total ingredients found: ${allIngredients.length}`);
+  console.log(`Unique ingredient count: ${uniqueIngredients.length}`);
+}
+
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
+});
