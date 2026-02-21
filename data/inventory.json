@@ -1,0 +1,14 @@
+{
+  "green onion": {
+    "qty": 2,
+    "unit": "bunch"
+  },
+  "chicken breast": {
+    "qty": 5,
+    "unit": "lb"
+  },
+  "olive oil": {
+    "qty": 3,
+    "unit": "qt"
+  }
+}

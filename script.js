@@ -57,6 +57,7 @@ let selectedMeal = 'dinner';
 const ingredientCategories = ['produce', 'protein', 'dairy', 'dry', 'other'];
 const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const EXPORT_BASE_PATH = 'data/exports';
+const REPORT_BASE_PATH = 'data/reports';
 const WEEKLY_DAY_KEYS = {
   Monday: ['Monday', 'Mon'],
   Tuesday: ['Tuesday', 'Tue', 'Tues'],
@@ -555,6 +556,19 @@ function downloadIngredientsExport(meal) {
   window.location.href = `${EXPORT_BASE_PATH}/${fileName}`;
 }
 
+function downloadGroceryExport(meal) {
+  const week = getSelectedExportWeek();
+  const normalizedMeal = meal === 'lunch' ? 'lunch' : meal === 'dinner' ? 'dinner' : 'combined';
+  const fileName = `grocery_${normalizedMeal}_week${week}.xlsx`;
+  window.location.href = `${EXPORT_BASE_PATH}/${fileName}`;
+}
+
+function downloadCombinedMissingInventoryReport() {
+  const week = getSelectedExportWeek();
+  const fileName = `missing_from_inventory_week${week}_combined.json`;
+  window.location.href = `${REPORT_BASE_PATH}/${fileName}`;
+}
+
 function setDaySelectorVisibility(showDaySelector) {
   const dayFilterGroup = document.getElementById('dayFilterGroup');
   const daySelect = document.getElementById('daySelect');
@@ -632,6 +646,10 @@ function attachEvents() {
   const exportWeekSelect = document.getElementById('exportWeekSelect');
   const downloadLunchIngredientsBtn = document.getElementById('downloadLunchIngredientsBtn');
   const downloadDinnerIngredientsBtn = document.getElementById('downloadDinnerIngredientsBtn');
+  const downloadLunchGroceryBtn = document.getElementById('downloadLunchGroceryBtn');
+  const downloadDinnerGroceryBtn = document.getElementById('downloadDinnerGroceryBtn');
+  const downloadCombinedGroceryBtn = document.getElementById('downloadCombinedGroceryBtn');
+  const downloadCombinedInventoryMissingBtn = document.getElementById('downloadCombinedInventoryMissingBtn');
 
   weekSelect.addEventListener('change', () => {
     syncExportWeekWithMainWeek();
@@ -657,6 +675,10 @@ function attachEvents() {
   lunchMealTab.addEventListener('click', () => setMeal('lunch'));
   downloadLunchIngredientsBtn.addEventListener('click', () => downloadIngredientsExport('lunch'));
   downloadDinnerIngredientsBtn.addEventListener('click', () => downloadIngredientsExport('dinner'));
+  downloadLunchGroceryBtn.addEventListener('click', () => downloadGroceryExport('lunch'));
+  downloadDinnerGroceryBtn.addEventListener('click', () => downloadGroceryExport('dinner'));
+  downloadCombinedGroceryBtn.addEventListener('click', () => downloadGroceryExport('combined'));
+  downloadCombinedInventoryMissingBtn.addEventListener('click', downloadCombinedMissingInventoryReport);
 }
 
 function requireElement(id) {
@@ -684,6 +706,10 @@ function validateRequiredSelectors() {
     'exportWeekSelect',
     'downloadLunchIngredientsBtn',
     'downloadDinnerIngredientsBtn',
+    'downloadLunchGroceryBtn',
+    'downloadDinnerGroceryBtn',
+    'downloadCombinedGroceryBtn',
+    'downloadCombinedInventoryMissingBtn',
     'recipesView',
     'weeklyView',
     'weeklyMenuGrid'

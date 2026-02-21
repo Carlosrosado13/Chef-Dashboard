@@ -1,0 +1,1649 @@
+{
+  "week": 2,
+  "meal": "lunch",
+  "generatedAt": "2026-02-21T21:07:42.783Z",
+  "items": [
+    {
+      "ingredient": "dry white wine",
+      "category": "Alcohol",
+      "status": "need",
+      "grocery": {
+        "qty": "1.5",
+        "unit": "qt"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "marsala wine",
+      "category": "Alcohol",
+      "status": "need",
+      "grocery": {
+        "qty": "2",
+        "unit": "qt"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "mirin",
+      "category": "Alcohol",
+      "status": "need",
+      "grocery": {
+        "qty": "1",
+        "unit": "qt"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "red wine vinegar",
+      "category": "Alcohol",
+      "status": "need",
+      "grocery": {
+        "qty": "2",
+        "unit": "cups"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "blue cheese crumble",
+      "category": "Dairy",
+      "status": "need",
+      "grocery": {
+        "qty": "5",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "blue cheese dressing",
+      "category": "Dairy",
+      "status": "need",
+      "grocery": {
+        "qty": "2.5",
+        "unit": "qt"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "butter",
+      "category": "Dairy",
+      "status": "need",
+      "grocery": {
+        "qty": "30",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "butter and cinnamon",
+      "category": "Dairy",
+      "status": "need",
+      "grocery": {
+        "qty": "3",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "butter, melted",
+      "category": "Dairy",
+      "status": "need",
+      "grocery": {
+        "qty": "4",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "clarified butter or oil",
+      "category": "Dairy",
+      "status": "need",
+      "grocery": {
+        "qty": "2",
+        "unit": "gal"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "coconut milk",
+      "category": "Dairy",
+      "status": "need",
+      "grocery": {
+        "qty": "4.5",
+        "unit": "gal"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "cream cheese",
+      "category": "Dairy",
+      "status": "need",
+      "grocery": {
+        "qty": "18",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "goat cheese, crumbled",
+      "category": "Dairy",
+      "status": "need",
+      "grocery": {
+        "qty": "5",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "greek yogurt",
+      "category": "Dairy",
+      "status": "need",
+      "grocery": {
+        "qty": "1.5",
+        "unit": "gal"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "gruyere cheese",
+      "category": "Dairy",
+      "status": "need",
+      "grocery": {
+        "qty": "8",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "heavy cream",
+      "category": "Dairy",
+      "status": "need",
+      "grocery": {
+        "qty": "15.5",
+        "unit": "gal"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "mozzarella",
+      "category": "Dairy",
+      "status": "need",
+      "grocery": {
+        "qty": "24",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "parmesan",
+      "category": "Dairy",
+      "status": "need",
+      "grocery": {
+        "qty": "10",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "parmesan and basil",
+      "category": "Dairy",
+      "status": "need",
+      "grocery": {
+        "qty": "4",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "parmesan, shaved",
+      "category": "Dairy",
+      "status": "need",
+      "grocery": {
+        "qty": "9.5",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "ricotta cheese",
+      "category": "Dairy",
+      "status": "need",
+      "grocery": {
+        "qty": "20",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "sour cream",
+      "category": "Dairy",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "whole milk",
+      "category": "Dairy",
+      "status": "need",
+      "grocery": {
+        "qty": "5",
+        "unit": "gal"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "bacon",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "12",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "bacon bit",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "5",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "baguette slice",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "60",
+        "unit": "ea"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "balsamic vinaigrette",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "2",
+        "unit": "qt"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "basil pesto",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "2",
+        "unit": "qt"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "beets, roasted and cut",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "20",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "brown lentils, dry",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "10",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "brown sugar",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "3",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "brussel sprouts, shaved",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "18",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "candied walnut",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "4",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "canola oil",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "2",
+        "unit": "qt"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "caper and green olive",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "4",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "champagne vinegar",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "2",
+        "unit": "cups"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "chive",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "1",
+        "unit": "cup"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "dark chocolate",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "7",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "day-old brioche, cubed",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "18",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "dijon mustard",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "extra virgin olive oil",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "2",
+        "unit": "qt"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "fresh ginger",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "2.5",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "herb stuffing",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "10",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "honey and dijon",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "1.5",
+        "unit": "cups"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "marinara sauce",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "8",
+        "unit": "gal"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "neutral oil",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "1.5",
+        "unit": "qt"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "olive oil",
+      "category": "Dry",
+      "status": "have",
+      "grocery": {
+        "qty": "9.5",
+        "unit": "qt"
+      },
+      "inventory": {
+        "qty": 3,
+        "unit": "qt"
+      },
+      "note": ""
+    },
+    {
+      "ingredient": "parsley",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "2",
+        "unit": "cups"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "pomegranate aril",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "4",
+        "unit": "qt"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "quinoa, dry",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "6",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "scallion and sesame seed",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "2",
+        "unit": "cups"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "sesame oil",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "2",
+        "unit": "cups"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "shortcake biscuit",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "50",
+        "unit": "ea"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "soy sauce",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "1",
+        "unit": "qt"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "sugar",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "59",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "tart shells, baked",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "50",
+        "unit": "ea"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "toasted almond",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "4",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "toasted coconut flake",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "3",
+        "unit": "qt"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "vanilla bean",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "10",
+        "unit": "ea"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "vanilla extract",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "28",
+        "unit": "oz"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "vegetable stock",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "23",
+        "unit": "gal"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "water",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "4",
+        "unit": "gal"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "white miso",
+      "category": "Dry",
+      "status": "need",
+      "grocery": {
+        "qty": "3",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "apple cider vinegar",
+      "category": "Fruit",
+      "status": "need",
+      "grocery": {
+        "qty": "4",
+        "unit": "cups"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "bosc pear",
+      "category": "Fruit",
+      "status": "need",
+      "grocery": {
+        "qty": "55",
+        "unit": "ea"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "lemon juice",
+      "category": "Fruit",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "lemon juice and dill",
+      "category": "Fruit",
+      "status": "need",
+      "grocery": {
+        "qty": "2",
+        "unit": "cups"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "lemon vinaigrette",
+      "category": "Fruit",
+      "status": "need",
+      "grocery": {
+        "qty": "2",
+        "unit": "qt"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "lemon wedge",
+      "category": "Fruit",
+      "status": "need",
+      "grocery": {
+        "qty": "60",
+        "unit": "ea"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "lemon zest",
+      "category": "Fruit",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "mixed berry",
+      "category": "Fruit",
+      "status": "need",
+      "grocery": {
+        "qty": "20",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "orange segment",
+      "category": "Fruit",
+      "status": "need",
+      "grocery": {
+        "qty": "4",
+        "unit": "qt"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "baby arugula",
+      "category": "Greens",
+      "status": "need",
+      "grocery": {
+        "qty": "9",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "baby kale",
+      "category": "Greens",
+      "status": "need",
+      "grocery": {
+        "qty": "10",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "iceberg lettuce head",
+      "category": "Greens",
+      "status": "need",
+      "grocery": {
+        "qty": "28",
+        "unit": "ea"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "mixed baby green",
+      "category": "Greens",
+      "status": "need",
+      "grocery": {
+        "qty": "9",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "mixed green",
+      "category": "Greens",
+      "status": "need",
+      "grocery": {
+        "qty": "9",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "spinach",
+      "category": "Greens",
+      "status": "need",
+      "grocery": {
+        "qty": "20",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "beef sirloin strip",
+      "category": "Protein",
+      "status": "need",
+      "grocery": {
+        "qty": "24",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "beef stock",
+      "category": "Protein",
+      "status": "need",
+      "grocery": {
+        "qty": "8",
+        "unit": "gal"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "chicken breast, 6 oz portion",
+      "category": "Protein",
+      "status": "need",
+      "grocery": {
+        "qty": "38",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "chicken stock",
+      "category": "Protein",
+      "status": "need",
+      "grocery": {
+        "qty": "12.5",
+        "unit": "gal"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "egg",
+      "category": "Protein",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "egg wash",
+      "category": "Protein",
+      "status": "need",
+      "grocery": {
+        "qty": "2",
+        "unit": "gal"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "egg yolk",
+      "category": "Protein",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "eggplant",
+      "category": "Protein",
+      "status": "need",
+      "grocery": {
+        "qty": "40",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "ground lamb",
+      "category": "Protein",
+      "status": "need",
+      "grocery": {
+        "qty": "24",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "ground turkey",
+      "category": "Protein",
+      "status": "need",
+      "grocery": {
+        "qty": "20",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "pork loin cutlets, pounded thin",
+      "category": "Protein",
+      "status": "need",
+      "grocery": {
+        "qty": "22",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "pork shoulder, boneless",
+      "category": "Protein",
+      "status": "need",
+      "grocery": {
+        "qty": "30",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "salmon fillets, 5 oz portion",
+      "category": "Protein",
+      "status": "need",
+      "grocery": {
+        "qty": "16",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "sea scallops, u10",
+      "category": "Protein",
+      "status": "need",
+      "grocery": {
+        "qty": "22",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "swordfish steaks, 6 oz portion",
+      "category": "Protein",
+      "status": "need",
+      "grocery": {
+        "qty": "19",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "turkey breast, butterflied",
+      "category": "Protein",
+      "status": "need",
+      "grocery": {
+        "qty": "24",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "cinnamon stick",
+      "category": "Spices",
+      "status": "need",
+      "grocery": {
+        "qty": "20",
+        "unit": "ea"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "fresh sage and thyme",
+      "category": "Spices",
+      "status": "need",
+      "grocery": {
+        "qty": "1.5",
+        "unit": "cups"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "fresh thyme",
+      "category": "Spices",
+      "status": "need",
+      "grocery": {
+        "qty": "10",
+        "unit": "oz"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "ground cinnamon",
+      "category": "Spices",
+      "status": "need",
+      "grocery": {
+        "qty": "0.33",
+        "unit": "cup"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "sea salt",
+      "category": "Spices",
+      "status": "need",
+      "grocery": {
+        "qty": "2",
+        "unit": "tbsp"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "arborio rice",
+      "category": "Starch",
+      "status": "need",
+      "grocery": {
+        "qty": "6",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "bread crumb",
+      "category": "Starch",
+      "status": "need",
+      "grocery": {
+        "qty": "22",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "cannelloni pasta tube",
+      "category": "Starch",
+      "status": "need",
+      "grocery": {
+        "qty": "350",
+        "unit": "ea"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "cooked rice",
+      "category": "Starch",
+      "status": "need",
+      "grocery": {
+        "qty": "14",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "flour",
+      "category": "Starch",
+      "status": "need",
+      "grocery": {
+        "qty": "8",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "flour for dredge",
+      "category": "Starch",
+      "status": "need",
+      "grocery": {
+        "qty": "3",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "graham cracker crumb",
+      "category": "Starch",
+      "status": "need",
+      "grocery": {
+        "qty": "8",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "tagliatelle pasta, dry",
+      "category": "Starch",
+      "status": "need",
+      "grocery": {
+        "qty": "14",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "basil, salt, pepper",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "bell pepper",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "100",
+        "unit": "halves"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "black pepper",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "carrot",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "44",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "cauliflower floret",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "30",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "celery",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "12",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "celery and onion",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "8",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "celery seed, salt, pepper",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "cherry tomato",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "26",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "crushed tomato",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "6.5",
+        "unit": "gal"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "cucumber",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "11",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "garlic",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "74",
+        "unit": "oz"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "garlic and cumin",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "12",
+        "unit": "oz"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "green cabbage",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "16",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "honey, salt, pepper",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "italian herbs, salt, pepper",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "leek",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "16",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "mixed mushroom",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "18",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "mushroom",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "26",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "nutmeg, salt, and pepper",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "nutmeg, salt, pepper",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "onion",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "64",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "paprika, salt, pepper",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "paprika, thyme, salt, pepper",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "parsley, salt, pepper",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "parsley, thyme, bay, salt, pepper",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "red cabbage",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "10",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "red onion",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "3",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "red onion, shaved",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "2.5",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "russet potato",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "28",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "salt and black pepper",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "salt and cracked pepper",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "salt and pepper",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "salt and white pepper",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "shallot",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "4",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "thyme, bay, salt, pepper",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "thyme, salt, pepper",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": null,
+        "unit": ""
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "tomato paste",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "4",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "tomato sauce",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "3",
+        "unit": "gal"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "yellow onion",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "8",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "yellow onions, thinly sliced",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "40",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    },
+    {
+      "ingredient": "yukon potato",
+      "category": "Vegetable",
+      "status": "need",
+      "grocery": {
+        "qty": "24",
+        "unit": "lb"
+      },
+      "inventory": null,
+      "note": "Missing in inventory"
+    }
+  ]
+}

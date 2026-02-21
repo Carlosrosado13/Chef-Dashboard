@@ -9,8 +9,12 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 const DINNER_FILE = path.join(ROOT_DIR, 'recipes.js');
 const LUNCH_FILE = path.join(ROOT_DIR, 'recipeslunch.js');
 const CATEGORY_FILE = path.join(ROOT_DIR, 'data', 'ingredient_categories.json');
+const ALIAS_FILE = path.join(ROOT_DIR, 'data', 'ingredient_aliases.json');
+const INVENTORY_FILE = path.join(ROOT_DIR, 'data', 'inventory.json');
 const OUTPUT_MASTER_FILE = path.join(ROOT_DIR, 'data', 'ingredients_master.xlsx');
 const EXPORT_DIR = path.join(ROOT_DIR, 'data', 'exports');
+const REPORT_DIR = path.join(ROOT_DIR, 'data', 'reports');
+const MISSING_CATEGORY_REPORT = path.join(REPORT_DIR, 'missing_categories.json');
 
 const VALID_CATEGORIES = [
   'Protein',
@@ -47,12 +51,46 @@ function stripHtml(value) {
     .trim();
 }
 
-function normalizeIngredient(value) {
-  return stripHtml(value).replace(/\s+/g, ' ').trim();
+function singularizeToken(token) {
+  if (!token || token.length < 4) return token;
+  const uncountables = new Set(['bass', 'glass', 'couscous', 'hummus']);
+  if (uncountables.has(token)) return token;
+
+  if (token.endsWith('ies') && token.length > 4) {
+    return `${token.slice(0, -3)}y`;
+  }
+  if (token.endsWith('oes') && token.length > 4) {
+    return token.slice(0, -2);
+  }
+  if (token.endsWith('s') && !token.endsWith('ss') && !token.endsWith('us')) {
+    return token.slice(0, -1);
+  }
+  return token;
 }
 
-function normalizeIngredientKey(value) {
-  return normalizeIngredient(value).toLowerCase();
+function normalizeIngredientName(raw) {
+  let value = stripHtml(raw).toLowerCase();
+  value = value.replace(/\([^)]*\)/g, ' ');
+  value = value.replace(/[\u2013\u2014]/g, '-');
+
+  const descriptorPattern = /,\s*(chopped|diced|minced|sliced|julienne|julienned|halved|peeled|shredded|grated|trimmed|drained|beaten|optional|fresh|for garnish|garnish)(?:\s+.*)?$/i;
+  value = value.replace(descriptorPattern, '');
+
+  value = value.replace(/\s+/g, ' ').trim();
+  if (!value) return '';
+
+  const words = value.split(' ').map((word) => {
+    if (!/^[a-z]+$/.test(word)) return word;
+    return singularizeToken(word);
+  });
+
+  return words.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+function canonicalize(name, aliasLookup) {
+  const normalized = normalizeIngredientName(name);
+  if (!normalized) return '';
+  return aliasLookup[normalized] || normalized;
 }
 
 function normalizeCategory(value) {
@@ -63,6 +101,85 @@ function normalizeCategory(value) {
     }
   }
   return null;
+}
+
+function loadJsonObject(filePath, label) {
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`${label} not found: ${filePath}`);
+  }
+
+  const raw = fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '');
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(`Failed to parse ${label}: ${error.message}`);
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`${label} must be a JSON object`);
+  }
+
+  return parsed;
+}
+
+function loadAliasDictionary() {
+  const rawAliases = loadJsonObject(ALIAS_FILE, 'Alias dictionary');
+  const aliasLookup = {};
+
+  for (const [rawVariant, rawCanonical] of Object.entries(rawAliases)) {
+    const variant = normalizeIngredientName(rawVariant);
+    const canonical = normalizeIngredientName(rawCanonical);
+    if (!variant || !canonical) continue;
+    aliasLookup[variant] = canonical;
+  }
+
+  return aliasLookup;
+}
+
+function loadCategoryDictionary(aliasLookup) {
+  const rawCategories = loadJsonObject(CATEGORY_FILE, 'Category dictionary');
+  const categoryLookup = {};
+
+  for (const [rawKey, rawCategory] of Object.entries(rawCategories)) {
+    const canonicalKey = canonicalize(rawKey, aliasLookup);
+    if (!canonicalKey) continue;
+
+    const category = normalizeCategory(rawCategory);
+    if (!category) {
+      throw new Error(
+        `Invalid category "${rawCategory}" for ingredient key "${rawKey}". Allowed: ${VALID_CATEGORIES.join(', ')}`
+      );
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(categoryLookup, canonicalKey)) {
+      categoryLookup[canonicalKey] = category;
+    }
+  }
+
+  return categoryLookup;
+}
+
+function loadInventory(aliasLookup) {
+  if (!fs.existsSync(INVENTORY_FILE)) {
+    return {};
+  }
+
+  const rawInventory = loadJsonObject(INVENTORY_FILE, 'Inventory file');
+  const inventory = {};
+
+  for (const [rawName, rawItem] of Object.entries(rawInventory)) {
+    const canonical = canonicalize(rawName, aliasLookup);
+    if (!canonical) continue;
+
+    const item = rawItem && typeof rawItem === 'object' ? rawItem : {};
+    inventory[canonical] = {
+      qty: item.qty ?? null,
+      unit: item.unit ? String(item.unit).trim() : '',
+    };
+  }
+
+  return inventory;
 }
 
 function evaluateFileIntoSandbox(filePath, sandbox) {
@@ -129,58 +246,65 @@ function assertWeekLikeData(datasetName, data) {
   }
 }
 
-function loadCategoryDictionary() {
-  if (!fs.existsSync(CATEGORY_FILE)) {
-    throw new Error(`Category dictionary not found: ${CATEGORY_FILE}`);
-  }
-
-  const raw = fs.readFileSync(CATEGORY_FILE, 'utf8').replace(/^\uFEFF/, '');
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (error) {
-    throw new Error(`Failed to parse category dictionary JSON: ${error.message}`);
-  }
-
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('Category dictionary must be a JSON object');
-  }
-
-  const normalized = {};
-  for (const [rawKey, rawCategory] of Object.entries(parsed)) {
-    const key = normalizeIngredientKey(rawKey);
-    if (!key) continue;
-
-    const category = normalizeCategory(rawCategory);
-    if (!category) {
-      throw new Error(
-        `Invalid category "${rawCategory}" for ingredient key "${rawKey}". Allowed: ${VALID_CATEGORIES.join(', ')}`
-      );
-    }
-
-    if (!Object.prototype.hasOwnProperty.call(normalized, key)) {
-      normalized[key] = category;
-    }
-  }
-
-  return normalized;
-}
-
 function parseQuantityAndUnit(value) {
   const cleaned = stripHtml(value).replace(/,/g, '.');
   if (!cleaned) {
-    return { quantity: '', unit: '' };
+    return { quantity: null, unit: '', raw: '' };
   }
 
-  const numericMatch = cleaned.match(/^([0-9]+(?:\.[0-9]+)?)\s*(.*)$/);
+  const unicodeFractionMap = {
+    '1/2': ['½', 'Â½'],
+    '1/4': ['¼', 'Â¼'],
+    '3/4': ['¾', 'Â¾'],
+    '1/3': ['⅓', 'â…“'],
+    '2/3': ['⅔', 'â…”'],
+    '1/8': ['⅛', 'â…›'],
+  };
+
+  let normalized = cleaned;
+  for (const [ascii, variants] of Object.entries(unicodeFractionMap)) {
+    for (const variant of variants) {
+      normalized = normalized.split(variant).join(ascii);
+    }
+  }
+
+  const mixedMatch = normalized.match(/^(\d+)\s+(\d+)\/(\d+)\s*(.*)$/);
+  if (mixedMatch) {
+    const whole = Number(mixedMatch[1]);
+    const numerator = Number(mixedMatch[2]);
+    const denominator = Number(mixedMatch[3]);
+    if (denominator) {
+      return {
+        quantity: whole + numerator / denominator,
+        unit: (mixedMatch[4] || '').trim(),
+        raw: cleaned,
+      };
+    }
+  }
+
+  const fractionMatch = normalized.match(/^(\d+)\/(\d+)\s*(.*)$/);
+  if (fractionMatch) {
+    const numerator = Number(fractionMatch[1]);
+    const denominator = Number(fractionMatch[2]);
+    if (denominator) {
+      return {
+        quantity: numerator / denominator,
+        unit: (fractionMatch[3] || '').trim(),
+        raw: cleaned,
+      };
+    }
+  }
+
+  const numericMatch = normalized.match(/^([0-9]+(?:\.[0-9]+)?)\s*(.*)$/);
   if (numericMatch) {
     return {
-      quantity: numericMatch[1],
+      quantity: Number(numericMatch[1]),
       unit: (numericMatch[2] || '').trim(),
+      raw: cleaned,
     };
   }
 
-  return { quantity: '', unit: cleaned };
+  return { quantity: null, unit: '', raw: cleaned };
 }
 
 function extractIngredientRowsFromRecipeHtml(recipeHtml) {
@@ -206,10 +330,10 @@ function extractIngredientRowsFromRecipeHtml(recipeHtml) {
     }
 
     if (cells.length > 0) {
-      const ingredient = normalizeIngredient(cells[0]);
+      const ingredient = stripHtml(cells[0]);
       if (ingredient && ingredient.toLowerCase() !== 'ingredient') {
         const amount = parseQuantityAndUnit(cells[1] || '');
-        rows.push({ ingredient, quantity: amount.quantity, unit: amount.unit });
+        rows.push({ ingredient, amount });
       }
     }
 
@@ -227,7 +351,7 @@ function initWeekMaps() {
   return byWeek;
 }
 
-function collectIngredientsByWeek(dataObject, categoryLookup, missingCategories) {
+function collectIngredientsByWeek(dataObject, aliasLookup, categoryLookup, missingCategories) {
   const byWeek = initWeekMaps();
 
   for (const [weekKey, weekRecipes] of Object.entries(dataObject)) {
@@ -239,33 +363,30 @@ function collectIngredientsByWeek(dataObject, categoryLookup, missingCategories)
 
     for (const recipeHtml of Object.values(weekRecipes)) {
       for (const row of extractIngredientRowsFromRecipeHtml(recipeHtml)) {
-        const key = normalizeIngredientKey(row.ingredient);
-        if (!key) continue;
+        const canonical = canonicalize(row.ingredient, aliasLookup);
+        if (!canonical) continue;
 
-        const category = categoryLookup[key] || UNCATEGORIZED;
+        const category = categoryLookup[canonical] || UNCATEGORIZED;
         if (category === UNCATEGORIZED) {
-          missingCategories.add(key);
+          missingCategories.add(canonical);
         }
 
-        if (!weekMap.has(key)) {
-          weekMap.set(key, {
-            ingredient: row.ingredient,
+        if (!weekMap.has(canonical)) {
+          weekMap.set(canonical, {
+            ingredient: canonical,
             category,
-            quantity: row.quantity,
-            unit: row.unit,
             count: 0,
+            measurements: [],
           });
         }
 
-        const entry = weekMap.get(key);
+        const entry = weekMap.get(canonical);
         entry.count += 1;
-
-        if (!entry.quantity && row.quantity) {
-          entry.quantity = row.quantity;
-        }
-        if (!entry.unit && row.unit) {
-          entry.unit = row.unit;
-        }
+        entry.measurements.push({
+          quantity: row.amount.quantity,
+          unit: row.amount.unit,
+          raw: row.amount.raw,
+        });
       }
     }
   }
@@ -273,11 +394,108 @@ function collectIngredientsByWeek(dataObject, categoryLookup, missingCategories)
   return byWeek;
 }
 
+function formatNumber(value) {
+  if (!Number.isFinite(value)) return '';
+  const rounded = Math.round(value * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+}
+
+function summarizeMeasurements(measurements) {
+  const byUnit = new Map();
+  const rawValues = new Set();
+
+  for (const measurement of measurements) {
+    const quantity = measurement.quantity;
+    const unit = (measurement.unit || '').trim().toLowerCase();
+
+    if (Number.isFinite(quantity) && unit) {
+      byUnit.set(unit, (byUnit.get(unit) || 0) + quantity);
+    } else if (measurement.raw) {
+      rawValues.add(measurement.raw);
+    }
+  }
+
+  if (byUnit.size === 1 && rawValues.size === 0) {
+    const [[unit, total]] = byUnit.entries();
+    return {
+      totalQuantity: formatNumber(total),
+      unit,
+      notes: '',
+    };
+  }
+
+  const notes = [];
+  if (byUnit.size > 1) {
+    const unitParts = [];
+    for (const [unit, total] of byUnit.entries()) {
+      unitParts.push(`${formatNumber(total)} ${unit}`.trim());
+    }
+    notes.push(`Mixed units: ${unitParts.join(', ')}`);
+  }
+  if (rawValues.size) {
+    notes.push(`Details: ${Array.from(rawValues).slice(0, 6).join('; ')}`);
+  }
+
+  return {
+    totalQuantity: '',
+    unit: '',
+    notes: notes.join(' | '),
+  };
+}
+
 function toSortedEntries(weekMap) {
   return Array.from(weekMap.values()).sort((a, b) => a.ingredient.localeCompare(b.ingredient));
 }
 
-async function writeWeeklyWorkbook(filePath, entries) {
+function toSortedGroceryEntries(weekMap) {
+  const entries = [];
+  for (const item of weekMap.values()) {
+    const summary = summarizeMeasurements(item.measurements);
+    entries.push({
+      ingredient: item.ingredient,
+      category: item.category,
+      totalQuantity: summary.totalQuantity,
+      unit: summary.unit,
+      notes: summary.notes,
+      count: item.count,
+    });
+  }
+
+  return entries.sort((a, b) => {
+    if (a.category === b.category) return a.ingredient.localeCompare(b.ingredient);
+    return a.category.localeCompare(b.category);
+  });
+}
+
+function combineWeekMaps(weekMapA, weekMapB) {
+  const combined = new Map();
+
+  function mergeFrom(source) {
+    for (const [key, entry] of source.entries()) {
+      if (!combined.has(key)) {
+        combined.set(key, {
+          ingredient: key,
+          category: entry.category,
+          count: 0,
+          measurements: [],
+        });
+      }
+
+      const target = combined.get(key);
+      target.count += entry.count;
+      target.measurements.push(...entry.measurements);
+      if (target.category === UNCATEGORIZED && entry.category !== UNCATEGORIZED) {
+        target.category = entry.category;
+      }
+    }
+  }
+
+  mergeFrom(weekMapA);
+  mergeFrom(weekMapB);
+  return combined;
+}
+
+async function writeIngredientWorkbook(filePath, entries) {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('Ingredients');
 
@@ -286,7 +504,35 @@ async function writeWeeklyWorkbook(filePath, entries) {
     { header: 'Category', key: 'category', width: 18 },
     { header: 'Quantity', key: 'quantity', width: 12 },
     { header: 'Unit', key: 'unit', width: 16 },
-    { header: 'Count', key: 'count', width: 10 },
+    { header: 'Notes', key: 'notes', width: 42 },
+  ];
+  sheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+  for (const entry of entries) {
+    const summary = summarizeMeasurements(entry.measurements);
+    sheet.addRow({
+      ingredient: entry.ingredient,
+      category: entry.category,
+      quantity: summary.totalQuantity,
+      unit: summary.unit,
+      notes: summary.notes || `Occurrences: ${entry.count}`,
+    });
+  }
+
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  await workbook.xlsx.writeFile(filePath);
+}
+
+async function writeGroceryWorkbook(filePath, entries) {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Grocery List');
+
+  sheet.columns = [
+    { header: 'Ingredient', key: 'ingredient', width: 45 },
+    { header: 'Category', key: 'category', width: 18 },
+    { header: 'TotalQuantity', key: 'totalQuantity', width: 14 },
+    { header: 'Unit', key: 'unit', width: 16 },
+    { header: 'Notes', key: 'notes', width: 42 },
   ];
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
 
@@ -294,9 +540,9 @@ async function writeWeeklyWorkbook(filePath, entries) {
     sheet.addRow({
       ingredient: entry.ingredient,
       category: entry.category,
-      quantity: entry.quantity,
+      totalQuantity: entry.totalQuantity,
       unit: entry.unit,
-      count: entry.count,
+      notes: entry.notes,
     });
   }
 
@@ -371,50 +617,131 @@ async function writeMasterWorkbook(masterRows) {
   await workbook.xlsx.writeFile(OUTPUT_MASTER_FILE);
 }
 
-async function writeWeeklyExports(dinnerByWeek, lunchByWeek) {
-  fs.mkdirSync(EXPORT_DIR, { recursive: true });
-
-  for (const weekNum of WEEK_NUMBERS) {
-    const dinnerFile = path.join(EXPORT_DIR, `ingredients_dinner_week${weekNum}.xlsx`);
-    const lunchFile = path.join(EXPORT_DIR, `ingredients_lunch_week${weekNum}.xlsx`);
-
-    await writeWeeklyWorkbook(dinnerFile, toSortedEntries(dinnerByWeek[weekNum]));
-    await writeWeeklyWorkbook(lunchFile, toSortedEntries(lunchByWeek[weekNum]));
-  }
+function writeJsonFile(filePath, payload) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
 }
 
-function logMissingCategories(missingCategories) {
-  if (!missingCategories.size) {
+function buildInventoryReport(week, meal, groceryEntries, inventoryLookup) {
+  const items = groceryEntries.map((entry) => {
+    const inventory = inventoryLookup[entry.ingredient];
+    const hasItem = Boolean(inventory);
+
+    let note = '';
+    if (!hasItem) {
+      note = 'Missing in inventory';
+    } else {
+      const groceryUnit = (entry.unit || '').trim().toLowerCase();
+      const inventoryUnit = (inventory.unit || '').trim().toLowerCase();
+      if (!entry.totalQuantity) {
+        note = 'Grocery quantity unavailable';
+      } else if (inventory.qty == null) {
+        note = 'Inventory quantity missing';
+      } else if (groceryUnit && inventoryUnit && groceryUnit !== inventoryUnit) {
+        note = `Unit differs: grocery=${groceryUnit}, inventory=${inventoryUnit}`;
+      }
+    }
+
+    return {
+      ingredient: entry.ingredient,
+      category: entry.category,
+      status: hasItem ? 'have' : 'need',
+      grocery: {
+        qty: entry.totalQuantity || null,
+        unit: entry.unit || '',
+      },
+      inventory: hasItem ? inventory : null,
+      note,
+    };
+  });
+
+  return {
+    week,
+    meal,
+    generatedAt: new Date().toISOString(),
+    items,
+  };
+}
+
+function writeMissingCategoryReport(missingCategories) {
+  const list = Array.from(missingCategories).sort();
+  const payload = {
+    generatedAt: new Date().toISOString(),
+    count: list.length,
+    ingredients: list,
+  };
+  writeJsonFile(MISSING_CATEGORY_REPORT, payload);
+  return payload;
+}
+
+async function writeWeekOutputs(week, dinnerWeekMap, lunchWeekMap, inventoryLookup) {
+  const dinnerIngredientPath = path.join(EXPORT_DIR, `ingredients_dinner_week${week}.xlsx`);
+  const lunchIngredientPath = path.join(EXPORT_DIR, `ingredients_lunch_week${week}.xlsx`);
+  await writeIngredientWorkbook(dinnerIngredientPath, toSortedEntries(dinnerWeekMap));
+  await writeIngredientWorkbook(lunchIngredientPath, toSortedEntries(lunchWeekMap));
+
+  const dinnerGroceryEntries = toSortedGroceryEntries(dinnerWeekMap);
+  const lunchGroceryEntries = toSortedGroceryEntries(lunchWeekMap);
+  const combinedWeekMap = combineWeekMaps(dinnerWeekMap, lunchWeekMap);
+  const combinedGroceryEntries = toSortedGroceryEntries(combinedWeekMap);
+
+  const dinnerGroceryPath = path.join(EXPORT_DIR, `grocery_dinner_week${week}.xlsx`);
+  const lunchGroceryPath = path.join(EXPORT_DIR, `grocery_lunch_week${week}.xlsx`);
+  const combinedGroceryPath = path.join(EXPORT_DIR, `grocery_combined_week${week}.xlsx`);
+
+  await writeGroceryWorkbook(dinnerGroceryPath, dinnerGroceryEntries);
+  await writeGroceryWorkbook(lunchGroceryPath, lunchGroceryEntries);
+  await writeGroceryWorkbook(combinedGroceryPath, combinedGroceryEntries);
+
+  const dinnerInventoryReport = buildInventoryReport(week, 'dinner', dinnerGroceryEntries, inventoryLookup);
+  const lunchInventoryReport = buildInventoryReport(week, 'lunch', lunchGroceryEntries, inventoryLookup);
+  const combinedInventoryReport = buildInventoryReport(week, 'combined', combinedGroceryEntries, inventoryLookup);
+
+  writeJsonFile(path.join(REPORT_DIR, `missing_from_inventory_week${week}_dinner.json`), dinnerInventoryReport);
+  writeJsonFile(path.join(REPORT_DIR, `missing_from_inventory_week${week}_lunch.json`), lunchInventoryReport);
+  writeJsonFile(path.join(REPORT_DIR, `missing_from_inventory_week${week}_combined.json`), combinedInventoryReport);
+}
+
+function logMissingCategories(report) {
+  if (!report.count) {
     console.log('Missing categories: 0');
     return;
   }
 
-  const sorted = Array.from(missingCategories).sort();
-  console.log(`Missing categories: ${sorted.length}`);
+  console.log(`Missing categories: ${report.count}`);
   console.log('Ingredients assigned to UNCATEGORIZED:');
-  for (const item of sorted) {
+  for (const item of report.ingredients) {
     console.log(`- ${item}`);
   }
+  console.log(`Missing category report: ${MISSING_CATEGORY_REPORT}`);
 }
 
 async function main() {
+  const aliasLookup = loadAliasDictionary();
+  const categoryLookup = loadCategoryDictionary(aliasLookup);
+  const inventoryLookup = loadInventory(aliasLookup);
+
   const dinnerData = loadDinnerData();
   const lunchData = loadLunchData();
 
   assertWeekLikeData('Dinner', dinnerData);
   assertWeekLikeData('Lunch', lunchData);
 
-  const categoryLookup = loadCategoryDictionary();
-
   console.log('Dinner keys sample:', Object.keys(dinnerData).slice(0, 5));
   console.log('Lunch keys sample:', Object.keys(lunchData).slice(0, 5));
+  console.log('Alias entries:', Object.keys(aliasLookup).length);
   console.log('Category dictionary entries:', Object.keys(categoryLookup).length);
 
   const missingCategories = new Set();
-  const dinnerByWeek = collectIngredientsByWeek(dinnerData, categoryLookup, missingCategories);
-  const lunchByWeek = collectIngredientsByWeek(lunchData, categoryLookup, missingCategories);
+  const dinnerByWeek = collectIngredientsByWeek(dinnerData, aliasLookup, categoryLookup, missingCategories);
+  const lunchByWeek = collectIngredientsByWeek(lunchData, aliasLookup, categoryLookup, missingCategories);
 
-  await writeWeeklyExports(dinnerByWeek, lunchByWeek);
+  fs.mkdirSync(EXPORT_DIR, { recursive: true });
+  fs.mkdirSync(REPORT_DIR, { recursive: true });
+
+  for (const week of WEEK_NUMBERS) {
+    await writeWeekOutputs(week, dinnerByWeek[week], lunchByWeek[week], inventoryLookup);
+  }
 
   const masterRows = buildMasterRows(dinnerByWeek, lunchByWeek);
   await writeMasterWorkbook(masterRows);
@@ -424,12 +751,15 @@ async function main() {
     0
   );
 
+  const missingReport = writeMissingCategoryReport(missingCategories);
+
   console.log(`Total ingredients found: ${totalIngredients}`);
   console.log(`Unique ingredient count: ${masterRows.length}`);
   console.log(`Wrote master workbook: ${OUTPUT_MASTER_FILE}`);
-  console.log(`Wrote weekly exports to: ${EXPORT_DIR}`);
+  console.log(`Wrote ingredient + grocery exports to: ${EXPORT_DIR}`);
+  console.log(`Wrote reports to: ${REPORT_DIR}`);
 
-  logMissingCategories(missingCategories);
+  logMissingCategories(missingReport);
 }
 
 main().catch((error) => {
