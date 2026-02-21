@@ -1,11 +1,11 @@
-const lunchMenuData = {
+﻿const lunchMenuData = {
   "Week 1": {
     "Monday": {
       "SOUP": "Roasted Tomato Basil Soup",
       "SALAD": "Arugula, Shaved Fennel & Citrus",
       "MAIN 1": "Grilled Lemon-Herb Chicken",
       "MAIN 2": "Seared Salmon with Dill Yogurt",
-      "DESSERT": "Chocolate Pot de Crème"
+      "DESSERT": "Chocolate Pot de CrÃ¨me"
     },
     "Tuesday": {
       "SOUP": "Cream of Mushroom Soup",
@@ -26,7 +26,7 @@ const lunchMenuData = {
       "SALAD": "Classic Caesar Salad (House Dressing)",
       "MAIN 1": "Chicken Piccata",
       "MAIN 2": "Grilled Portobello with Romesco",
-      "DESSERT": "Espresso Crème Brûlée"
+      "DESSERT": "Espresso CrÃ¨me BrÃ»lÃ©e"
     },
     "Friday": {
       "SOUP": "New England Clam Chowder",
@@ -154,55 +154,57 @@ const lunchMenuData = {
   },
   "Week 4": {
     "Monday": {
-      "SOUP": "CREAM OF SPINACH  (GF)",
-      "SALAD": "ARUGULA / PARMESAN / LEMON VINAIGRETTE      (GF)",
-      "MAIN 1": "ROASTED PORK LOIN / MUSTARD JUS                         (GF)",
-      "MAIN 2": "CHICKEN CAESAR WRAP",
-      "DESSERT": "BASQUE CHEESECAKE"
+      "SOUP": "Tomato Basil Soup (8 oz)",
+      "SALAD": "Arugula & Cherry Tomato Salad",
+      "MAIN 1": "Lemon-Garlic Shrimp",
+      "MAIN 2": "Chicken Parmesan",
+      "DESSERT": "Tiramisu Cup"
     },
     "Tuesday": {
-      "SOUP": "CHICKEN NOODLE  (DF)",
-      "SALAD": "MIXED GREENS / PEAR / WALNUT                           (GF/DF)",
-      "MAIN 1": "TURKEY CLUB / CHIPOTLE MAYO",
-      "MAIN 2": "SPAGHETTI BOLOGNESE",
-      "DESSERT": "LEMON MERINGUE PIE"
+      "SOUP": "Roasted Garlic & Potato Soup (8 oz)",
+      "SALAD": "Mixed Greens Salad with Balsamic",
+      "MAIN 1": "Grilled Flank Steak with Chimichurri",
+      "MAIN 2": "Mushroom Risotto",
+      "DESSERT": "Brownie with Whipped Cream"
     },
     "Wednesday": {
-      "SOUP": "SWEET CORN CHOWDER  (GF)",
-      "SALAD": "CUCUMBER / DILL YOGURT                                  (GF)",
-      "MAIN 1": "SALMON CAKES / HERB AIOLI",
-      "MAIN 2": "VEAL PARMESAN / MARINARA",
-      "DESSERT": "CHOCOLATE ÉCLAIR"
+      "SOUP": "Miso Vegetable Soup (8 oz)",
+      "SALAD": "Cucumber & Seaweed Salad",
+      "MAIN 1": "Teriyaki Chicken Bowl",
+      "MAIN 2": "Seared Salmon Poke-Style",
+      "DESSERT": "Mango Sorbet"
     },
     "Thursday": {
-      "SOUP": "ROASTED RED PEPPER  (GF/DF)",
-      "SALAD": "CAESAR SALAD",
-      "MAIN 1": "BEEF STROGANOFF / EGG NOODLES",
-      "MAIN 2": "CHICKEN SCHNITZEL",
-      "DESSERT": "CARAMEL APPLE CRISP"
+      "SOUP": "Cream of Broccoli Soup (8 oz)",
+      "SALAD": "Kale Caesar Salad",
+      "MAIN 1": "Pork Tenderloin with Mustard Jus",
+      "MAIN 2": "Zucchini & Tomato Tart",
+      "DESSERT": "Lemon Bars"
     },
     "Friday": {
-      "SOUP": "New England Clam Chowder",
-      "SALAD": "BIBB / AVOCADO / HERB VINAIGRETTE                 (GF/DF)",
-      "MAIN 1": "Fish & Chips",
-      "MAIN 2": "Roast Beef Dip",
-      "DESSERT": "Strawberry Shortcake"
+      "SOUP": "Corn Chowder (8 oz)",
+      "SALAD": "Bibb Lettuce & Radish Salad",
+      "MAIN 1": "Crab Cakes",
+      "MAIN 2": "Beef Pastrami Sandwich",
+      "DESSERT": "Chocolate Layer Cake"
     },
     "Saturday": {
-      "SOUP": "GARLIC AND POTATO  (GF)",
-      "SALAD": "SPINACH / STRAWBERRY / BALSAMIC                    (GF/DF)",
-      "MAIN 1": "CHICKEN QUESADILLA",
-      "MAIN 2": "PORK TENDERLOIN / DIJON SAUCE                        (GF)",
-      "DESSERT": "BLUEBERRY CHEESECAKE"
+      "SOUP": "Black Bean Soup (8 oz)",
+      "SALAD": "Coleslaw",
+      "MAIN 1": "BBQ Chicken",
+      "MAIN 2": "Mac & Cheese (Elevated)",
+      "DESSERT": "Peach Cobbler"
     },
     "Sunday": {
-      "SOUP": "ROASTED TOMATO BASIL  (GF/DF)",
-      "SALAD": "TOMATO & BURRATA  (GF)",
-      "MAIN 1": "BRAISED BEEF / MUSHROOM GRAVY                         (GF)",
-      "MAIN 2": "GRILLED CHEESE / TOMATO SOUP",
-      "DESSERT": "CARROT CAKE"
+      "SOUP": "Vegetable Soup (8 oz)",
+      "SALAD": "Mixed Greens with Citrus Vinaigrette",
+      "MAIN 1": "Shaved Beef Sliders",
+      "MAIN 2": "Eggplant & Chickpea Stew",
+      "DESSERT": "Vanilla Bean Panna Cotta"
     }
   }
 };
 
 globalThis.lunchMenuData = lunchMenuData;
+
+
