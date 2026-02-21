@@ -24,6 +24,60 @@ const CATEGORIES = [
   'Dairy',
 ];
 
+function loadJsData(filePath) {
+  const code = fs.readFileSync(filePath, 'utf8');
+
+  // Sandbox that supports both CommonJS (module.exports) and "global" vars
+  const sandbox = {
+    module: { exports: {} },
+    exports: {},
+    require,
+    console,
+  };
+  vm.createContext(sandbox);
+
+  // Run the file in the sandbox
+  vm.runInContext(code, sandbox, { filename: filePath });
+
+  // 1) If the file exports normally (module.exports = ...)
+  if (sandbox.module && sandbox.module.exports && Object.keys(sandbox.module.exports).length) {
+    return sandbox.module.exports;
+  }
+
+  // 2) If the file attaches the object as a global var (e.g., const recipes = {...})
+  // Try common names used in these projects:
+  const candidates = [
+    sandbox.recipes,
+    sandbox.recipesLunch,
+    sandbox.recipeslunch,
+    sandbox.lunchRecipes,
+    sandbox.data,
+  ].filter(Boolean);
+
+  if (candidates.length) return candidates[0];
+
+  // 3) Last resort: pick the biggest plain object sitting on sandbox
+  const objs = Object.values(sandbox).filter(
+    (v) => v && typeof v === 'object' && !Array.isArray(v)
+  );
+  objs.sort((a, b) => Object.keys(b).length - Object.keys(a).length);
+
+  if (objs.length) return objs[0];
+
+  throw new Error(`Could not find exported data in: ${filePath}`);
+}
+
+// Load both datasets
+const dinnerData = loadJsData(DINNER_FILE);
+const lunchData  = loadJsData(LUNCH_FILE);
+
+// If your script expects "weeks" at the top level, merge them:
+const dataObject = { ...dinnerData, ...lunchData };
+
+// Quick sanity check (optional)
+console.log('Dinner keys sample:', Object.keys(dinnerData).slice(0, 5));
+console.log('Lunch keys sample:', Object.keys(lunchData).slice(0, 5));
+
 function emptyWeekCounts() {
   return { 1: 0, 2: 0, 3: 0, 4: 0 };
 }
