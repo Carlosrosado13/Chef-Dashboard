@@ -24,6 +24,10 @@ const CATEGORIES = [
   'Dairy',
 ];
 
+function emptyWeekCounts() {
+  return { 1: 0, 2: 0, 3: 0, 4: 0 };
+}
+
 function decodeEntities(value) {
   if (!value) return '';
   return value
@@ -65,16 +69,46 @@ function categorize(nameRaw) {
     { cat: "Frozen", keys: ["frozen"] },
   ];
 
+  const ingredientStats = new Map();
+
+function addIngredientUse(ingredient, weekNum) {
+  if (!ingredient || !weekNum) return;
+
+  const key = ingredient.toLowerCase();
+
+  if (!ingredientStats.has(key)) {
+    ingredientStats.set(key, {
+      name: ingredient,
+      category: categorize(ingredient),
+      weeks: emptyWeekCounts(),
+    });
+  }
+
+  ingredientStats.get(key).weeks[weekNum] += 1;
+}
+
   for (const r of rules) {
     if (r.keys.some(k => name.includes(k))) return r.cat;
   }
   return "Uncategorized";
 }
-function collectRecipeHtmlStrings(dataObject) {
-  const htmlStrings = [];
-  if (!dataObject || typeof dataObject !== 'object') {
-    return htmlStrings;
+function collectIngredientsByWeek(dataObject) {
+  if (!dataObject || typeof dataObject !== 'object') return;
+
+  for (const [weekKey, weekRecipes] of Object.entries(dataObject)) {
+    const weekNum = Number(weekKey);
+    if (!weekNum || typeof weekRecipes !== 'object') continue;
+
+    for (const recipeHtml of Object.values(weekRecipes)) {
+      if (typeof recipeHtml !== 'string') continue;
+
+      const ingredients = extractIngredientsFromRecipeHtml(recipeHtml);
+      for (const ingredient of ingredients) {
+        addIngredientUse(ingredient, weekNum);
+      }
+    }
   }
+}
 
   for (const weekRecipes of Object.values(dataObject)) {
     if (!weekRecipes || typeof weekRecipes !== 'object') continue;
@@ -113,18 +147,26 @@ async function writeWorkbook(uniqueIngredients) {
   const workbook = new ExcelJS.Workbook();
 
   const ingredientsSheet = workbook.addWorksheet('Ingredients');
-  ingredientsSheet.columns = [
-    { header: 'Ingredient', key: 'ingredient', width: 48 },
-    { header: 'Category', key: 'category', width: 22 },
-  ];
+ingredientsSheet.columns = [
+  { header: 'Ingredient', key: 'ingredient', width: 45 },
+  { header: 'Category', key: 'category', width: 20 },
+  { header: 'Week 1', key: 'week1', width: 10 },
+  { header: 'Week 2', key: 'week2', width: 10 },
+  { header: 'Week 3', key: 'week3', width: 10 },
+  { header: 'Week 4', key: 'week4', width: 10 },
+];
   ingredientsSheet.views = [{ state: 'frozen', ySplit: 1 }];
 
-  for (const ingredient of uniqueIngredients) {
-    ingredientsSheet.addRow({ 
-      ingredient, 
-      category: categorize(ingredient), 
-    });
-  }
+  for (const { name, category, weeks } of ingredientStats.values()) {
+  ingredientsSheet.addRow({
+    ingredient: name,
+    category,
+    week1: weeks[1],
+    week2: weeks[2],
+    week3: weeks[3],
+    week4: weeks[4],
+  });
+}
 
   const categoriesSheet = workbook.addWorksheet('Categories');
   categoriesSheet.getColumn(1).width = 22;
@@ -167,15 +209,8 @@ async function main() {
     throw new Error('Could not find lunch data on globalThis.recipesDataLunch or globalThis.recipesLunchData');
   }
 
-  const recipeHtmlStrings = [
-    ...collectRecipeHtmlStrings(dinnerData),
-    ...collectRecipeHtmlStrings(lunchData),
-  ];
-
-  const allIngredients = [];
-  for (const recipeHtml of recipeHtmlStrings) {
-    allIngredients.push(...extractIngredientsFromRecipeHtml(recipeHtml));
-  }
+  collectIngredientsByWeek(dinnerData);
+  collectIngredientsByWeek(lunchData);
 
   const uniqueMap = new Map();
   for (const ingredient of allIngredients) {
