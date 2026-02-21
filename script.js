@@ -36,7 +36,6 @@ function resolveGlobalValue(...names) {
     if (name === 'lunchMenuData' && typeof lunchMenuData !== 'undefined') return lunchMenuData;
     if (name === 'recipesData' && typeof recipesData !== 'undefined') return recipesData;
     if (name === 'recipesLunchData' && typeof recipesLunchData !== 'undefined') return recipesLunchData;
-    if (name === 'lunchRecipesWeek1' && typeof lunchRecipesWeek1 !== 'undefined') return lunchRecipesWeek1;
   }
 
   return undefined;
@@ -50,7 +49,7 @@ const mealData = {
   lunch: lunchMenuDataStore
 };
 const recipesStore = resolveGlobalValue('recipesData') || null;
-const lunchRecipesStore = resolveGlobalValue('recipesLunchData', 'lunchRecipesWeek1') || {};
+const lunchRecipesStore = resolveGlobalValue('recipesLunchData') || {};
 
 let selectedDish = null;
 let selectedMeal = 'dinner';
@@ -257,137 +256,23 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-function normalizeLunchRecipeTitle(value) {
-  if (!value) return '';
-  return String(value)
-    .replace(/\((?:\s*(?:GF|DF|VG|V|VEG|NF|SF)(?:\s*\/\s*(?:GF|DF|VG|V|VEG|NF|SF))*\s*)\)/gi, ' ')
-    .replace(/\s*\/\s*/g, ' / ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-}
-
-function normalizeInstructionValue(value) {
-  if (Array.isArray(value)) {
-    return value
-      .map(line => String(line || '').trim())
-      .filter(Boolean)
-      .join('\n');
-  }
-  return String(value || '').trim();
-}
-
-function isMissingInstructionValue(value) {
-  const normalized = normalizeInstructionValue(value).toLowerCase();
-  return !normalized || normalized === 'recipe added.' || normalized === 'recipe not added yet';
-}
-
-function extractLunchDressingTitle(saladTitle) {
-  const clean = String(saladTitle || '').trim();
-  if (!clean) return '';
-
-  const slashParts = clean.split('/').map(part => part.trim()).filter(Boolean);
-  if (slashParts.length > 1) {
-    return slashParts[slashParts.length - 1];
-  }
-
-  const parenMatch = clean.match(/\(([^)]+dressing[^)]*)\)/i);
-  if (parenMatch) return parenMatch[1].trim();
-  return '';
-}
-
-function buildLunchSlotExpectedTitle(slot, dayMenu) {
-  if (!dayMenu) return '';
-  if (slot.key === 'soup') return dayMenu.SOUP || '';
-  if (slot.key === 'salad') return dayMenu.SALAD || '';
-  if (slot.key === 'main1') return dayMenu['MAIN 1'] || '';
-  if (slot.key === 'main2') return dayMenu['MAIN 2'] || '';
-  if (slot.key === 'dessert') return dayMenu.DESSERT || '';
-  if (slot.key === 'saladDressing') return extractLunchDressingTitle(dayMenu.SALAD || '');
-  return '';
-}
-
-function scoreTitleWordOverlap(left, right) {
-  const leftWords = normalizeLunchRecipeTitle(left).split(/\s+/).filter(Boolean);
-  const rightWords = normalizeLunchRecipeTitle(right).split(/\s+/).filter(Boolean);
-  if (!leftWords.length || !rightWords.length) return 0;
-  const common = leftWords.filter(word => rightWords.includes(word));
-  return common.length / Math.min(leftWords.length, rightWords.length);
-}
-
-function findLunchRecipeHtmlByTitle(weekRecipes, expectedTitle) {
-  if (!weekRecipes || !expectedTitle) return null;
-  const target = normalizeLunchRecipeTitle(expectedTitle);
-  if (!target) return null;
-
-  let bestKey = null;
-  let bestScore = 0;
-
-  Object.keys(weekRecipes).forEach(title => {
-    const normalizedTitle = normalizeLunchRecipeTitle(title);
-    if (!normalizedTitle) return;
-    if (normalizedTitle === target) {
-      bestKey = title;
-      bestScore = 1;
-      return;
-    }
-
-    const score = scoreTitleWordOverlap(normalizedTitle, target);
-    if (score > bestScore) {
-      bestKey = title;
-      bestScore = score;
-    }
-  });
-
-  return bestScore >= 0.5 ? weekRecipes[bestKey] : null;
-}
-
-function renderLunchRecipeCard(recipeHtml, expectedTitle, context) {
-  if (recipeHtml) return recipeHtml;
-  console.warn('Missing lunch recipe for:', expectedTitle || 'Unknown lunch recipe', context);
-  return '<section class="recipe-card"><p>Recipe not added yet</p></section>';
-}
-
-function renderLunchRecipesByDay(week, day) {
-  const weekRecipes = lunchRecipesStore[String(week)] || lunchRecipesStore[`Week ${week}`] || {};
-  const dayMenu = getMealMenu('lunch', week, day);
-  const slots = [
-    { key: 'soup', label: 'Soup' },
-    { key: 'salad', label: 'Salad' },
-    { key: 'saladDressing', label: 'Salad Dressing / Vinaigrette' },
-    { key: 'main1', label: 'Main 1' },
-    { key: 'main2', label: 'Main 2' },
-    { key: 'dessert', label: 'Dessert' }
-  ];
-
-  return slots
-    .map(slot => {
-      const expectedTitle = buildLunchSlotExpectedTitle(slot, dayMenu) || slot.label;
-      const recipeHtml = weekRecipes[expectedTitle] || findLunchRecipeHtmlByTitle(weekRecipes, expectedTitle);
-      return `<article><h2>${slot.label}</h2>${renderLunchRecipeCard(recipeHtml, expectedTitle, { week, day, meal: 'lunch' })}</article>`;
-    })
-    .join('');
-}
-
 function renderRecipe() {
   const recipeDetails = document.getElementById('recipeDetails');
   if (!recipeDetails) return;
 
   const weekSelect = document.getElementById('weekSelect');
   const week = weekSelect.value;
-  const day = document.getElementById('daySelect').value;
+  const invalidDishPattern = selectedMeal === 'dinner'
+    ? /^(add alternative|n\/a)$/i
+    : /^menu item not set$/i;
 
-  if (selectedMeal === 'lunch') {
-    recipeDetails.innerHTML = renderLunchRecipesByDay(week, day);
-    return;
-  }
-
-  if (!selectedDish || /^(add alternative|n\/a)$/i.test(selectedDish)) {
+  if (!selectedDish || invalidDishPattern.test(selectedDish)) {
     recipeDetails.innerHTML = '<p>Select a dish to view its recipe.</p>';
     return;
   }
 
-  const weekRecipes = recipesStore && recipesStore[week];
+  const store = selectedMeal === 'dinner' ? recipesStore : lunchRecipesStore;
+  const weekRecipes = store && store[week];
   if (!weekRecipes) {
     recipeDetails.innerHTML = '<p>Recipe data not available for this week.</p>';
     return;
@@ -402,9 +287,11 @@ function renderRecipe() {
 }
 
 function handleDishClick(elem) {
-  if (selectedMeal === 'lunch') return;
   const dishName = elem.dataset.dish;
-  if (!dishName || /^(add alternative|n\/a)$/i.test(dishName)) return;
+  const invalidDishPattern = selectedMeal === 'dinner'
+    ? /^(add alternative|n\/a)$/i
+    : /^menu item not set$/i;
+  if (!dishName || invalidDishPattern.test(dishName)) return;
 
   selectedDish = dishName;
   const blocks = document.querySelectorAll('.menu-item-block');
@@ -521,16 +408,9 @@ function renderDay(meal, weekKey, dayName) {
     itemBlock.dataset.dish = dishText;
     itemBlock.appendChild(label);
     itemBlock.appendChild(dish);
-    if (meal === 'dinner') {
-      itemBlock.addEventListener('click', () => handleDishClick(itemBlock));
-    }
+    itemBlock.addEventListener('click', () => handleDishClick(itemBlock));
     menuRow.appendChild(itemBlock);
   });
-
-  if (meal !== 'dinner') {
-    renderRecipe();
-    return;
-  }
 
   const blocks = document.querySelectorAll('.menu-item-block');
   for (let i = 0; i < blocks.length; i += 1) {

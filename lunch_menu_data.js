@@ -103,53 +103,53 @@ const lunchMenuData = {
   },
   "Week 3": {
     "Monday": {
-      "SOUP": "CREAM OF CAULIFLOWER  (GF)",
-      "SALAD": "MIXED GREENS / RASPBERRY VINAIGRETTE             (GF/DF)",
-      "MAIN 1": "CHICKEN ALFREDO / PENNE",
-      "MAIN 2": "BEEF CHILI / SOUR CREAM / CHEDDAR                    (GF)",
-      "DESSERT": "CHOCOLATE CHIP COOKIE BAR"
+      "SOUP": "Butternut Squash Soup (8 oz)",
+      "SALAD": "Spinach Salad with Dried Cranberries & Almonds",
+      "MAIN 1": "Seared Trout with Brown Butter",
+      "MAIN 2": "Herb-Roasted Chicken Thigh",
+      "DESSERT": "Maple Panna Cotta"
     },
     "Tuesday": {
-      "SOUP": "FRENCH ONION",
-      "SALAD": "CAESAR SALAD",
-      "MAIN 1": "TURKEY REUBEN / SAUERKRAUT / SWISS",
-      "MAIN 2": "CHICKEN SHAWARMA / GARLIC SAUCE / PITA",
-      "DESSERT": "LEMON TART"
+      "SOUP": "Tomato Fennel Soup (8 oz)",
+      "SALAD": "Asian Slaw",
+      "MAIN 1": "Beef Meatloaf with Jus",
+      "MAIN 2": "Vegetable Stir-Fry with Sesame",
+      "DESSERT": "Chocolate Chip Cookie Bars"
     },
     "Wednesday": {
-      "SOUP": "CREAM OF ASPARAGUS  (GF)",
-      "SALAD": "BEET / GOAT CHEESE / ARUGULA                           (GF)",
-      "MAIN 1": "SALMON BURGER / HERB MAYO",
-      "MAIN 2": "BEEF LASAGNA",
-      "DESSERT": "STRAWBERRY RHUBARB CRISP"
+      "SOUP": "Corn & Pepper Chowder (8 oz)",
+      "SALAD": "Romaine, Cucumber & Herb Vinaigrette Salad",
+      "MAIN 1": "Shrimp & Grits",
+      "MAIN 2": "Chicken Alfredo",
+      "DESSERT": "Lemon Pound Cake"
     },
     "Thursday": {
-      "SOUP": "CHICKEN AND RICE  (GF)",
-      "SALAD": "COLESLAW  (GF/DF)",
-      "MAIN 1": "PULLED PORK SANDWICH / BBQ",
-      "MAIN 2": "CHICKEN POT PIE",
-      "DESSERT": "CARROT CAKE"
+      "SOUP": "Mushroom Velout\u00E9 (8 oz)",
+      "SALAD": "Arugula, Pear & Walnut Salad",
+      "MAIN 1": "Braised Lamb Shoulder",
+      "MAIN 2": "Ricotta Stuffed Shells",
+      "DESSERT": "Chocolate Tart"
     },
     "Friday": {
-      "SOUP": "CLAM CHOWDER  (GF)",
-      "SALAD": "BIBB / CUCUMBER / HERB VINAIGRETTE                 (GF/DF)",
-      "MAIN 1": "FISH SANDWICH / TARTAR",
-      "MAIN 2": "ROAST BEEF DIP / AU JUS",
-      "DESSERT": "BLUEBERRY CHEESECAKE"
+      "SOUP": "Seafood Chowder (8 oz)",
+      "SALAD": "Mixed Greens Salad",
+      "MAIN 1": "Fish & Chips",
+      "MAIN 2": "Braised Beef Pot Roast",
+      "DESSERT": "Vanilla Custard"
     },
     "Saturday": {
-      "SOUP": "TOMATO BASIL  (GF/DF)",
-      "SALAD": "SPINACH / STRAWBERRY / BALSAMIC                    (GF/DF)",
-      "MAIN 1": "CHICKEN QUESADILLA / SALSA",
-      "MAIN 2": "BEEF STIR FRY / RICE                                      (GF/DF)",
-      "DESSERT": "BANANA CREAM PIE"
+      "SOUP": "Minestrone Soup (8 oz)",
+      "SALAD": "Caprese Salad",
+      "MAIN 1": "Grilled Sausage & Peppers",
+      "MAIN 2": "Spinach Gnocchi",
+      "DESSERT": "Cannoli Cream Parfait"
     },
     "Sunday": {
-      "SOUP": "BEEF VEGETABLE  (GF/DF)",
-      "SALAD": "TOMATO & BURRATA  (GF)",
-      "MAIN 1": "ROAST TURKEY / GRAVY                                     (GF)",
-      "MAIN 2": "GRILLED CHEESE / TOMATO SOUP",
-      "DESSERT": "CHOCOLATE MOUSSE"
+      "SOUP": "Turkey & Rice Soup (8 oz)",
+      "SALAD": "Apple & Celery Salad",
+      "MAIN 1": "Roast Turkey",
+      "MAIN 2": "Vegetable Pot Pie",
+      "DESSERT": "Pumpkin Cheesecake"
     }
   },
   "Week 4": {

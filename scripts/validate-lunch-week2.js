@@ -18,50 +18,48 @@ const context = vm.createContext({ console, globalThis: {} });
 loadScriptIntoContext(context, 'menu_overview.js');
 loadScriptIntoContext(context, 'dinner_menu_data.js');
 loadScriptIntoContext(context, 'lunch_menu_data.js');
-loadScriptIntoContext(context, 'data/lunchRecipesWeek1.js');
-loadScriptIntoContext(context, 'data/lunchRecipesWeek2.js');
+loadScriptIntoContext(context, 'recipeslunch.js');
 
 const lunchMenuData = context.globalThis.lunchMenuData;
-const lunchRecipes = context.globalThis.lunchRecipesWeek1;
+const lunchRecipes = context.globalThis.recipesLunchData;
 const dinnerMenuData = context.globalThis.dinnerMenuData;
 
-const weekKey = 'Week 2';
+const weekKey = '2';
+const weekMenuKey = 'Week 2';
 const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const errors = [];
 
 for (const day of days) {
-  const menuDay = lunchMenuData?.[weekKey]?.[day];
-  const recipeDay = lunchRecipes?.[weekKey]?.[day];
+  const menuDay = lunchMenuData?.[weekMenuKey]?.[day];
+  const recipeWeek = lunchRecipes?.[weekKey];
   if (!menuDay) errors.push(`Missing lunch menu for ${day}.`);
-  if (!recipeDay) errors.push(`Missing lunch recipes for ${day}.`);
-  if (!menuDay || !recipeDay) continue;
+  if (!recipeWeek) errors.push(`Missing lunch recipes for week ${weekKey}.`);
+  if (!menuDay || !recipeWeek) continue;
 
   const expected = {
-    soup: menuDay['SOUP'],
-    salad: menuDay['SALAD'],
-    main1: menuDay['MAIN 1'],
-    main2: menuDay['MAIN 2'],
-    dessert: menuDay['DESSERT']
+    SOUP: menuDay['SOUP'],
+    SALAD: menuDay['SALAD'],
+    'MAIN 1': menuDay['MAIN 1'],
+    'MAIN 2': menuDay['MAIN 2'],
+    DESSERT: menuDay['DESSERT']
   };
 
   for (const [slot, menuTitle] of Object.entries(expected)) {
-    const recipe = recipeDay[slot];
-    if (!recipe) {
-      errors.push(`${day} missing recipe slot: ${slot}.`);
+    if (!menuTitle) continue;
+    const recipeHtml = recipeWeek[menuTitle];
+    if (!recipeHtml) {
+      errors.push(`${day} missing recipe for slot ${slot}: '${menuTitle}'.`);
       continue;
     }
-    if (!recipe.instructions || !String(recipe.instructions).trim()) {
-      errors.push(`${day} ${slot} has empty instructions.`);
-    }
-    if (normalizeTitle(recipe.title) !== normalizeTitle(menuTitle)) {
-      errors.push(`${day} ${slot} title mismatch. menu='${menuTitle}' recipe='${recipe.title}'.`);
+    if (normalizeTitle(recipeHtml).includes('recipe not added yet')) {
+      errors.push(`${day} ${slot} contains placeholder recipe content: '${menuTitle}'.`);
     }
   }
 }
 
 const lunchTitles = new Set();
 for (const day of days) {
-  const menuDay = lunchMenuData?.[weekKey]?.[day] || {};
+  const menuDay = lunchMenuData?.[weekMenuKey]?.[day] || {};
   ['SOUP', 'SALAD', 'MAIN 1', 'MAIN 2', 'DESSERT'].forEach((key) => {
     if (menuDay[key]) lunchTitles.add(normalizeTitle(menuDay[key]));
   });
