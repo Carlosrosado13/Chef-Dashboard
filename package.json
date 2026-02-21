@@ -7,5 +7,22 @@
   },
   "devDependencies": {
     "exceljs": "^4.4.0"
-  }
+  },
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  },
+  "description": "",
+  "main": "data.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Carlosrosado13/Chef-Dashboard.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Carlosrosado13/Chef-Dashboard/issues"
+  },
+  "homepage": "https://github.com/Carlosrosado13/Chef-Dashboard#readme"
 }
