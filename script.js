@@ -56,6 +56,7 @@ let selectedMeal = 'dinner';
 
 const ingredientCategories = ['produce', 'protein', 'dairy', 'dry', 'other'];
 const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const EXPORT_BASE_PATH = 'data/exports';
 const WEEKLY_DAY_KEYS = {
   Monday: ['Monday', 'Mon'],
   Tuesday: ['Tuesday', 'Tue', 'Tues'],
@@ -531,6 +532,29 @@ function renderWeeklyView(weekId) {
   renderWeek(selectedMeal, week);
 }
 
+function getSelectedExportWeek() {
+  const exportWeekSelect = document.getElementById('exportWeekSelect');
+  return exportWeekSelect && exportWeekSelect.value ? String(exportWeekSelect.value) : '1';
+}
+
+function syncExportWeekWithMainWeek() {
+  const weekSelect = document.getElementById('weekSelect');
+  const exportWeekSelect = document.getElementById('exportWeekSelect');
+  if (!weekSelect || !exportWeekSelect) return;
+
+  const weekValue = String(weekSelect.value || '');
+  if (['1', '2', '3', '4'].includes(weekValue)) {
+    exportWeekSelect.value = weekValue;
+  }
+}
+
+function downloadIngredientsExport(meal) {
+  const week = getSelectedExportWeek();
+  const normalizedMeal = meal === 'lunch' ? 'lunch' : 'dinner';
+  const fileName = `ingredients_${normalizedMeal}_week${week}.xlsx`;
+  window.location.href = `${EXPORT_BASE_PATH}/${fileName}`;
+}
+
 function setDaySelectorVisibility(showDaySelector) {
   const dayFilterGroup = document.getElementById('dayFilterGroup');
   const daySelect = document.getElementById('daySelect');
@@ -586,6 +610,7 @@ function setMeal(meal) {
 
   populateWeeks(selectedMeal);
   populateDays();
+  syncExportWeekWithMainWeek();
 
   renderMenuRow();
   renderIngredients();
@@ -604,8 +629,12 @@ function attachEvents() {
   const weeklyTab = document.getElementById('weeklyTab');
   const dinnerMealTab = document.getElementById('dinnerMealTab');
   const lunchMealTab = document.getElementById('lunchMealTab');
+  const exportWeekSelect = document.getElementById('exportWeekSelect');
+  const downloadLunchIngredientsBtn = document.getElementById('downloadLunchIngredientsBtn');
+  const downloadDinnerIngredientsBtn = document.getElementById('downloadDinnerIngredientsBtn');
 
   weekSelect.addEventListener('change', () => {
+    syncExportWeekWithMainWeek();
     const isWeeklyActive = document.getElementById('weeklyView').classList.contains('active');
     if (!isWeeklyActive) {
       populateDays();
@@ -626,6 +655,8 @@ function attachEvents() {
   weeklyTab.addEventListener('click', () => switchTab('weekly'));
   dinnerMealTab.addEventListener('click', () => setMeal('dinner'));
   lunchMealTab.addEventListener('click', () => setMeal('lunch'));
+  downloadLunchIngredientsBtn.addEventListener('click', () => downloadIngredientsExport('lunch'));
+  downloadDinnerIngredientsBtn.addEventListener('click', () => downloadIngredientsExport('dinner'));
 }
 
 function requireElement(id) {
@@ -650,6 +681,9 @@ function validateRequiredSelectors() {
     'weeklyTab',
     'dinnerMealTab',
     'lunchMealTab',
+    'exportWeekSelect',
+    'downloadLunchIngredientsBtn',
+    'downloadDinnerIngredientsBtn',
     'recipesView',
     'weeklyView',
     'weeklyMenuGrid'
@@ -670,6 +704,7 @@ function init() {
 
   populateWeeks(selectedMeal);
   populateDays();
+  syncExportWeekWithMainWeek();
 
   try {
     buildIngredientCheckerData();

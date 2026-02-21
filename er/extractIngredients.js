@@ -8,9 +8,11 @@ const ExcelJS = require('exceljs');
 const ROOT_DIR = path.resolve(__dirname, '..');
 const DINNER_FILE = path.join(ROOT_DIR, 'recipes.js');
 const LUNCH_FILE = path.join(ROOT_DIR, 'recipeslunch.js');
-const OUTPUT_FILE = path.join(ROOT_DIR, 'data', 'ingredients_master.xlsx');
+const CATEGORY_FILE = path.join(ROOT_DIR, 'data', 'ingredient_categories.json');
+const OUTPUT_MASTER_FILE = path.join(ROOT_DIR, 'data', 'ingredients_master.xlsx');
+const EXPORT_DIR = path.join(ROOT_DIR, 'data', 'exports');
 
-const CATEGORIES = [
+const VALID_CATEGORIES = [
   'Protein',
   'Starch',
   'Dry',
@@ -22,14 +24,10 @@ const CATEGORIES = [
   'Spices',
   'Alcohol',
   'Dairy',
-  'Uncategorized',
 ];
 
-const ingredientStats = new Map();
-
-function emptyWeekCounts() {
-  return { 1: 0, 2: 0, 3: 0, 4: 0 };
-}
+const UNCATEGORIZED = 'UNCATEGORIZED';
+const WEEK_NUMBERS = [1, 2, 3, 4];
 
 function decodeEntities(value) {
   if (!value) return '';
@@ -42,9 +40,29 @@ function decodeEntities(value) {
     .replace(/&gt;/gi, '>');
 }
 
+function stripHtml(value) {
+  return decodeEntities(String(value || ''))
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function normalizeIngredient(value) {
-  const decoded = decodeEntities(value);
-  return decoded.replace(/\s+/g, ' ').trim();
+  return stripHtml(value).replace(/\s+/g, ' ').trim();
+}
+
+function normalizeIngredientKey(value) {
+  return normalizeIngredient(value).toLowerCase();
+}
+
+function normalizeCategory(value) {
+  const input = String(value || '').trim().toLowerCase();
+  for (const category of VALID_CATEGORIES) {
+    if (category.toLowerCase() === input) {
+      return category;
+    }
+  }
+  return null;
 }
 
 function evaluateFileIntoSandbox(filePath, sandbox) {
@@ -55,39 +73,36 @@ function evaluateFileIntoSandbox(filePath, sandbox) {
   vm.runInContext(source, sandbox, { filename: path.basename(filePath) });
 }
 
-function loadDinnerData() {
+function buildRuntimeSandbox() {
   const runtime = { module: { exports: {} }, exports: {} };
   runtime.globalThis = runtime;
   runtime.window = runtime;
   runtime.self = runtime;
-  const sandbox = vm.createContext(runtime);
+  return vm.createContext(runtime);
+}
 
+function loadDinnerData() {
+  const sandbox = buildRuntimeSandbox();
   evaluateFileIntoSandbox(DINNER_FILE, sandbox);
 
-  if (!runtime.recipesData || typeof runtime.recipesData !== 'object') {
-    throw new Error('Could not find dinner data on globalThis.recipesData');
+  const dinnerData = sandbox.recipesData;
+  if (!dinnerData || typeof dinnerData !== 'object') {
+    throw new Error('Could not find dinner data on globalThis.recipesData from recipes.js');
   }
-
-  return runtime.recipesData;
+  return dinnerData;
 }
 
 function loadLunchData() {
-  const runtime = { module: { exports: {} }, exports: {} };
-  runtime.globalThis = runtime;
-  runtime.window = runtime;
-  runtime.self = runtime;
-  const sandbox = vm.createContext(runtime);
-
+  const sandbox = buildRuntimeSandbox();
   evaluateFileIntoSandbox(LUNCH_FILE, sandbox);
 
-  const fromModule = runtime.module && runtime.module.exports && runtime.module.exports.recipesLunchData;
-  const fromGlobal = runtime.recipesLunchData;
+  const fromModule = sandbox.module && sandbox.module.exports && sandbox.module.exports.recipesLunchData;
+  const fromGlobal = sandbox.recipesLunchData;
   const lunchData = fromModule || fromGlobal;
 
   if (!lunchData || typeof lunchData !== 'object') {
-    throw new Error('Could not find lunch data via module.exports.recipesLunchData or globalThis.recipesLunchData');
+    throw new Error('Could not find lunch data via module.exports.recipesLunchData or globalThis.recipesLunchData from recipeslunch.js');
   }
-
   return lunchData;
 }
 
@@ -97,71 +112,84 @@ function assertWeekLikeData(datasetName, data) {
     throw new Error(`${datasetName} data is empty`);
   }
 
-  const numericKeys = keys.filter((k) => Number.isFinite(Number(k)));
-  if (!numericKeys.length) {
-    throw new Error(`${datasetName} data does not have numeric week keys`);
+  const numericWeekKeys = keys.filter((key) => Number.isFinite(Number(key)));
+  if (!numericWeekKeys.length) {
+    throw new Error(`${datasetName} data does not contain numeric week keys`);
   }
 
-  const sampleWeek = data[numericKeys[0]];
+  const sampleWeekKey = numericWeekKeys[0];
+  const sampleWeek = data[sampleWeekKey];
   if (!sampleWeek || typeof sampleWeek !== 'object') {
-    throw new Error(`${datasetName} week ${numericKeys[0]} is not an object`);
+    throw new Error(`${datasetName} week ${sampleWeekKey} is not an object`);
   }
 
-  const hasHtmlRecipe = Object.values(sampleWeek).some((v) => typeof v === 'string' && v.includes('<'));
-  if (!hasHtmlRecipe) {
-    throw new Error(`${datasetName} sample week ${numericKeys[0]} has no recipe HTML strings`);
+  const hasRecipeHtml = Object.values(sampleWeek).some((value) => typeof value === 'string' && value.includes('<'));
+  if (!hasRecipeHtml) {
+    throw new Error(`${datasetName} week ${sampleWeekKey} has no HTML recipe strings`);
   }
 }
 
-function categorize(nameRaw) {
-  const name = nameRaw.toLowerCase();
-  const rules = [
-    { cat: 'Greens', keys: ['lettuce', 'arugula', 'spinach', 'kale', 'romaine', 'mixed greens'] },
-    { cat: 'Protein', keys: ['chicken', 'beef', 'pork', 'lamb', 'turkey', 'sausage', 'shrimp', 'salmon', 'fish', 'haddock', 'egg'] },
-    { cat: 'Dairy', keys: ['milk', 'cream', 'cheese', 'butter', 'yogurt', 'parmesan', 'feta', 'mozzarella'] },
-    { cat: 'Fruit', keys: ['apple', 'berries', 'berry', 'lemon', 'orange', 'mango', 'pear'] },
-    { cat: 'Vegetable', keys: ['onion', 'garlic', 'carrot', 'zucchini', 'tomato', 'pepper', 'mushroom', 'potato', 'eggplant', 'cucumber', 'leeks', 'shallot'] },
-    { cat: 'Starch', keys: ['rice', 'pasta', 'bread', 'polenta', 'gnocchi', 'potato'] },
-    { cat: 'Dry', keys: ['flour', 'cornmeal', 'cornstarch', 'sugar', 'cocoa', 'breadcrumbs', 'bread crumbs'] },
-    { cat: 'Spices', keys: ['salt', 'pepper', 'paprika', 'cumin', 'thyme', 'rosemary', 'chili', 'red pepper flakes'] },
-    { cat: 'Alcohol', keys: ['wine', 'brandy', 'beer', 'rum'] },
-    { cat: 'Can', keys: ['canned', 'tomato paste', 'beans'] },
-    { cat: 'Frozen', keys: ['frozen'] },
-  ];
+function loadCategoryDictionary() {
+  if (!fs.existsSync(CATEGORY_FILE)) {
+    throw new Error(`Category dictionary not found: ${CATEGORY_FILE}`);
+  }
 
-  for (const rule of rules) {
-    if (rule.keys.some((key) => name.includes(key))) {
-      return rule.cat;
+  const raw = fs.readFileSync(CATEGORY_FILE, 'utf8').replace(/^\uFEFF/, '');
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(`Failed to parse category dictionary JSON: ${error.message}`);
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Category dictionary must be a JSON object');
+  }
+
+  const normalized = {};
+  for (const [rawKey, rawCategory] of Object.entries(parsed)) {
+    const key = normalizeIngredientKey(rawKey);
+    if (!key) continue;
+
+    const category = normalizeCategory(rawCategory);
+    if (!category) {
+      throw new Error(
+        `Invalid category "${rawCategory}" for ingredient key "${rawKey}". Allowed: ${VALID_CATEGORIES.join(', ')}`
+      );
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(normalized, key)) {
+      normalized[key] = category;
     }
   }
-  return 'Uncategorized';
+
+  return normalized;
 }
 
-function addIngredientUse(ingredient, weekNum) {
-  if (!ingredient || !weekNum) return;
-
-  const key = ingredient.toLowerCase();
-  if (!ingredientStats.has(key)) {
-    ingredientStats.set(key, {
-      name: ingredient,
-      category: categorize(ingredient),
-      weeks: emptyWeekCounts(),
-      total: 0,
-    });
+function parseQuantityAndUnit(value) {
+  const cleaned = stripHtml(value).replace(/,/g, '.');
+  if (!cleaned) {
+    return { quantity: '', unit: '' };
   }
 
-  const entry = ingredientStats.get(key);
-  if (!entry.weeks[weekNum]) {
-    entry.weeks[weekNum] = 0;
+  const numericMatch = cleaned.match(/^([0-9]+(?:\.[0-9]+)?)\s*(.*)$/);
+  if (numericMatch) {
+    return {
+      quantity: numericMatch[1],
+      unit: (numericMatch[2] || '').trim(),
+    };
   }
-  entry.weeks[weekNum] += 1;
-  entry.total += 1;
+
+  return { quantity: '', unit: cleaned };
 }
 
-function extractIngredientsFromRecipeHtml(recipeHtml) {
-  const ingredients = [];
+function extractIngredientRowsFromRecipeHtml(recipeHtml) {
+  const rows = [];
+  if (typeof recipeHtml !== 'string' || !recipeHtml) {
+    return rows;
+  }
+
   let cursor = 0;
-
   while (cursor < recipeHtml.length) {
     const trStart = recipeHtml.indexOf('<tr', cursor);
     if (trStart === -1) break;
@@ -169,91 +197,204 @@ function extractIngredientsFromRecipeHtml(recipeHtml) {
     const trEnd = recipeHtml.indexOf('</tr>', trStart);
     if (trEnd === -1) break;
 
-    const rowHtml = recipeHtml.slice(trStart, trEnd);
-    const tdStart = rowHtml.indexOf('<td');
-    if (tdStart !== -1) {
-      const tdOpenEnd = rowHtml.indexOf('>', tdStart);
-      const tdClose = tdOpenEnd === -1 ? -1 : rowHtml.indexOf('</td>', tdOpenEnd + 1);
+    const rowHtml = recipeHtml.slice(trStart, trEnd + 5);
+    const cells = [];
+    const tdRegex = /<td\b[^>]*>([\s\S]*?)<\/td>/gi;
+    let tdMatch;
+    while ((tdMatch = tdRegex.exec(rowHtml)) !== null) {
+      cells.push(stripHtml(tdMatch[1]));
+    }
 
-      if (tdOpenEnd !== -1 && tdClose !== -1) {
-        const firstCellRaw = rowHtml
-          .slice(tdOpenEnd + 1, tdClose)
-          .replace(/<[^>]*>/g, ' ');
-        const ingredient = normalizeIngredient(firstCellRaw);
-
-        if (ingredient && ingredient.toLowerCase() !== 'ingredient') {
-          ingredients.push(ingredient);
-        }
+    if (cells.length > 0) {
+      const ingredient = normalizeIngredient(cells[0]);
+      if (ingredient && ingredient.toLowerCase() !== 'ingredient') {
+        const amount = parseQuantityAndUnit(cells[1] || '');
+        rows.push({ ingredient, quantity: amount.quantity, unit: amount.unit });
       }
     }
 
     cursor = trEnd + 5;
   }
 
-  return ingredients;
+  return rows;
 }
 
-function collectIngredientsByWeek(dataObject) {
+function initWeekMaps() {
+  const byWeek = {};
+  for (const week of WEEK_NUMBERS) {
+    byWeek[week] = new Map();
+  }
+  return byWeek;
+}
+
+function collectIngredientsByWeek(dataObject, categoryLookup, missingCategories) {
+  const byWeek = initWeekMaps();
+
   for (const [weekKey, weekRecipes] of Object.entries(dataObject)) {
     const weekNum = Number(weekKey);
-    if (!weekNum || !weekRecipes || typeof weekRecipes !== 'object') continue;
+    if (!WEEK_NUMBERS.includes(weekNum)) continue;
+    if (!weekRecipes || typeof weekRecipes !== 'object') continue;
+
+    const weekMap = byWeek[weekNum];
 
     for (const recipeHtml of Object.values(weekRecipes)) {
-      if (typeof recipeHtml !== 'string') continue;
-      const ingredients = extractIngredientsFromRecipeHtml(recipeHtml);
-      for (const ingredient of ingredients) {
-        addIngredientUse(ingredient, weekNum);
+      for (const row of extractIngredientRowsFromRecipeHtml(recipeHtml)) {
+        const key = normalizeIngredientKey(row.ingredient);
+        if (!key) continue;
+
+        const category = categoryLookup[key] || UNCATEGORIZED;
+        if (category === UNCATEGORIZED) {
+          missingCategories.add(key);
+        }
+
+        if (!weekMap.has(key)) {
+          weekMap.set(key, {
+            ingredient: row.ingredient,
+            category,
+            quantity: row.quantity,
+            unit: row.unit,
+            count: 0,
+          });
+        }
+
+        const entry = weekMap.get(key);
+        entry.count += 1;
+
+        if (!entry.quantity && row.quantity) {
+          entry.quantity = row.quantity;
+        }
+        if (!entry.unit && row.unit) {
+          entry.unit = row.unit;
+        }
       }
     }
   }
+
+  return byWeek;
 }
 
-async function writeWorkbook() {
+function toSortedEntries(weekMap) {
+  return Array.from(weekMap.values()).sort((a, b) => a.ingredient.localeCompare(b.ingredient));
+}
+
+async function writeWeeklyWorkbook(filePath, entries) {
   const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Ingredients');
 
-  const ingredientsSheet = workbook.addWorksheet('Ingredients');
-  ingredientsSheet.columns = [
+  sheet.columns = [
     { header: 'Ingredient', key: 'ingredient', width: 45 },
-    { header: 'Category', key: 'category', width: 20 },
-    { header: 'Week 1', key: 'week1', width: 10 },
-    { header: 'Week 2', key: 'week2', width: 10 },
-    { header: 'Week 3', key: 'week3', width: 10 },
-    { header: 'Week 4', key: 'week4', width: 10 },
+    { header: 'Category', key: 'category', width: 18 },
+    { header: 'Quantity', key: 'quantity', width: 12 },
+    { header: 'Unit', key: 'unit', width: 16 },
+    { header: 'Count', key: 'count', width: 10 },
   ];
-  ingredientsSheet.views = [{ state: 'frozen', ySplit: 1 }];
+  sheet.views = [{ state: 'frozen', ySplit: 1 }];
 
-  const sorted = Array.from(ingredientStats.values()).sort((a, b) => a.name.localeCompare(b.name));
-  for (const { name, category, weeks } of sorted) {
-    ingredientsSheet.addRow({
-      ingredient: name,
-      category,
-      week1: weeks[1] || 0,
-      week2: weeks[2] || 0,
-      week3: weeks[3] || 0,
-      week4: weeks[4] || 0,
+  for (const entry of entries) {
+    sheet.addRow({
+      ingredient: entry.ingredient,
+      category: entry.category,
+      quantity: entry.quantity,
+      unit: entry.unit,
+      count: entry.count,
     });
   }
 
-  const categoriesSheet = workbook.addWorksheet('Categories');
-  categoriesSheet.getColumn(1).width = 22;
-  for (const category of CATEGORIES) {
-    categoriesSheet.addRow([category]);
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  await workbook.xlsx.writeFile(filePath);
+}
+
+function buildMasterRows(dinnerByWeek, lunchByWeek) {
+  const master = new Map();
+
+  function applyWeek(weekMap, mealKey, weekNum) {
+    for (const [ingredientKey, item] of weekMap.entries()) {
+      if (!master.has(ingredientKey)) {
+        master.set(ingredientKey, {
+          ingredient: item.ingredient,
+          category: item.category,
+          dinner: { 1: 0, 2: 0, 3: 0, 4: 0 },
+          lunch: { 1: 0, 2: 0, 3: 0, 4: 0 },
+        });
+      }
+
+      const row = master.get(ingredientKey);
+      row[mealKey][weekNum] += item.count;
+      if (row.category === UNCATEGORIZED && item.category !== UNCATEGORIZED) {
+        row.category = item.category;
+      }
+    }
   }
 
-  const lastIngredientRow = Math.max(2, ingredientsSheet.rowCount);
-  for (let row = 2; row <= lastIngredientRow; row += 1) {
-    ingredientsSheet.getCell(`B${row}`).dataValidation = {
-      type: 'list',
-      allowBlank: true,
-      formulae: [`=Categories!$A$1:$A$${CATEGORIES.length}`],
-      showErrorMessage: true,
-      errorTitle: 'Invalid Category',
-      error: 'Please select a category from the dropdown list.',
-    };
+  for (const weekNum of WEEK_NUMBERS) {
+    applyWeek(dinnerByWeek[weekNum], 'dinner', weekNum);
+    applyWeek(lunchByWeek[weekNum], 'lunch', weekNum);
   }
 
-  fs.mkdirSync(path.dirname(OUTPUT_FILE), { recursive: true });
-  await workbook.xlsx.writeFile(OUTPUT_FILE);
+  return Array.from(master.values()).sort((a, b) => a.ingredient.localeCompare(b.ingredient));
+}
+
+async function writeMasterWorkbook(masterRows) {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Ingredients Master');
+
+  sheet.columns = [
+    { header: 'Ingredient', key: 'ingredient', width: 45 },
+    { header: 'Category', key: 'category', width: 18 },
+    { header: 'Dinner Week 1', key: 'd1', width: 14 },
+    { header: 'Dinner Week 2', key: 'd2', width: 14 },
+    { header: 'Dinner Week 3', key: 'd3', width: 14 },
+    { header: 'Dinner Week 4', key: 'd4', width: 14 },
+    { header: 'Lunch Week 1', key: 'l1', width: 14 },
+    { header: 'Lunch Week 2', key: 'l2', width: 14 },
+    { header: 'Lunch Week 3', key: 'l3', width: 14 },
+    { header: 'Lunch Week 4', key: 'l4', width: 14 },
+  ];
+  sheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+  for (const row of masterRows) {
+    sheet.addRow({
+      ingredient: row.ingredient,
+      category: row.category,
+      d1: row.dinner[1],
+      d2: row.dinner[2],
+      d3: row.dinner[3],
+      d4: row.dinner[4],
+      l1: row.lunch[1],
+      l2: row.lunch[2],
+      l3: row.lunch[3],
+      l4: row.lunch[4],
+    });
+  }
+
+  fs.mkdirSync(path.dirname(OUTPUT_MASTER_FILE), { recursive: true });
+  await workbook.xlsx.writeFile(OUTPUT_MASTER_FILE);
+}
+
+async function writeWeeklyExports(dinnerByWeek, lunchByWeek) {
+  fs.mkdirSync(EXPORT_DIR, { recursive: true });
+
+  for (const weekNum of WEEK_NUMBERS) {
+    const dinnerFile = path.join(EXPORT_DIR, `ingredients_dinner_week${weekNum}.xlsx`);
+    const lunchFile = path.join(EXPORT_DIR, `ingredients_lunch_week${weekNum}.xlsx`);
+
+    await writeWeeklyWorkbook(dinnerFile, toSortedEntries(dinnerByWeek[weekNum]));
+    await writeWeeklyWorkbook(lunchFile, toSortedEntries(lunchByWeek[weekNum]));
+  }
+}
+
+function logMissingCategories(missingCategories) {
+  if (!missingCategories.size) {
+    console.log('Missing categories: 0');
+    return;
+  }
+
+  const sorted = Array.from(missingCategories).sort();
+  console.log(`Missing categories: ${sorted.length}`);
+  console.log('Ingredients assigned to UNCATEGORIZED:');
+  for (const item of sorted) {
+    console.log(`- ${item}`);
+  }
 }
 
 async function main() {
@@ -263,18 +404,32 @@ async function main() {
   assertWeekLikeData('Dinner', dinnerData);
   assertWeekLikeData('Lunch', lunchData);
 
+  const categoryLookup = loadCategoryDictionary();
+
   console.log('Dinner keys sample:', Object.keys(dinnerData).slice(0, 5));
   console.log('Lunch keys sample:', Object.keys(lunchData).slice(0, 5));
+  console.log('Category dictionary entries:', Object.keys(categoryLookup).length);
 
-  collectIngredientsByWeek(dinnerData);
-  collectIngredientsByWeek(lunchData);
+  const missingCategories = new Set();
+  const dinnerByWeek = collectIngredientsByWeek(dinnerData, categoryLookup, missingCategories);
+  const lunchByWeek = collectIngredientsByWeek(lunchData, categoryLookup, missingCategories);
 
-  await writeWorkbook();
+  await writeWeeklyExports(dinnerByWeek, lunchByWeek);
 
-  const totalIngredients = Array.from(ingredientStats.values()).reduce((sum, entry) => sum + entry.total, 0);
+  const masterRows = buildMasterRows(dinnerByWeek, lunchByWeek);
+  await writeMasterWorkbook(masterRows);
+
+  const totalIngredients = masterRows.reduce(
+    (sum, row) => sum + WEEK_NUMBERS.reduce((acc, week) => acc + row.dinner[week] + row.lunch[week], 0),
+    0
+  );
+
   console.log(`Total ingredients found: ${totalIngredients}`);
-  console.log(`Unique ingredient count: ${ingredientStats.size}`);
-  console.log(`Wrote workbook: ${OUTPUT_FILE}`);
+  console.log(`Unique ingredient count: ${masterRows.length}`);
+  console.log(`Wrote master workbook: ${OUTPUT_MASTER_FILE}`);
+  console.log(`Wrote weekly exports to: ${EXPORT_DIR}`);
+
+  logMissingCategories(missingCategories);
 }
 
 main().catch((error) => {
