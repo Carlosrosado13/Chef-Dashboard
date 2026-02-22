@@ -110,6 +110,8 @@ const ingredientCategories = ['produce', 'protein', 'dairy', 'dry', 'other'];
 const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const EXPORT_BASE_PATH = 'data/exports';
 const REPORT_BASE_PATH = 'data/reports';
+const API_BASE_STORAGE_KEY = 'chefDashboardApiBaseUrl';
+const DEFAULT_API_BASE_URL = 'https://chef-dashboard-api.carlosrosado13.workers.dev';
 const WEEKLY_DAY_KEYS = {
   Monday: ['Monday', 'Mon'],
   Tuesday: ['Tuesday', 'Tue', 'Tues'],
@@ -425,13 +427,40 @@ function renderRecipe() {
     if (typeof recipeValue === 'string') {
       recipeDetails.innerHTML = sanitizeRecipeHtmlIngredients(recipeValue);
     } else if (recipeValue && typeof recipeValue === 'object') {
-      recipeDetails.innerHTML = buildGeneratedRecipeHtml(recipeValue);
+      recipeDetails.innerHTML = renderRecipeObject(recipeValue);
     } else {
       recipeDetails.innerHTML = '<p>Recipe not available for the selected dish.</p>';
     }
   } else {
     recipeDetails.innerHTML = '<p>Recipe not available for the selected dish.</p>';
   }
+}
+
+function hasNonEmptyIngredientRows(recipeHtml) {
+  if (!recipeHtml || typeof recipeHtml !== 'string') return false;
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = recipeHtml;
+  const rows = Array.from(wrapper.querySelectorAll('table tbody tr'));
+  return rows.some((row) => {
+    const cells = Array.from(row.querySelectorAll('td')).map((cell) => stripHtml(cell.textContent || '').trim());
+    if (!cells.length) return false;
+    if (cells.length === 1) return Boolean(cells[0]);
+    return Boolean(cells[0] || cells[1] || cells.slice(2).some(Boolean));
+  });
+}
+
+function renderRecipeObject(recipeValue) {
+  const generatedHtml = typeof recipeValue.generatedHtml === 'string'
+    ? recipeValue.generatedHtml
+    : typeof recipeValue.recipeHtml === 'string'
+      ? recipeValue.recipeHtml
+      : '';
+
+  if (generatedHtml && hasNonEmptyIngredientRows(generatedHtml)) {
+    return sanitizeRecipeHtmlIngredients(generatedHtml);
+  }
+
+  return buildGeneratedRecipeHtml(recipeValue);
 }
 
 function sanitizeRecipeHtmlIngredients(recipeHtml) {
@@ -729,7 +758,9 @@ function getRecipeStoreByMenu(menu) {
 
 function getApiBaseUrl() {
   const input = document.getElementById('adminApiBase');
-  return input ? input.value.trim().replace(/\/+$/, '') : '';
+  const raw = input ? input.value : '';
+  const normalized = String(raw || '').trim().replace(/\/+$/, '');
+  return normalized || DEFAULT_API_BASE_URL;
 }
 
 function getAdminSecret() {
@@ -1179,6 +1210,7 @@ function attachEvents() {
   const updateMenuSelect = document.getElementById('updateMenuSelect');
   const updateWeekSelect = document.getElementById('updateWeekSelect');
   const updateDaySelect = document.getElementById('updateDaySelect');
+  const adminApiBaseInput = document.getElementById('adminApiBase');
   const extractPreviewBtn = document.getElementById('extractPreviewBtn');
   const applyUpdateBtn = document.getElementById('applyUpdateBtn');
   const downloadPatchBtn = document.getElementById('downloadPatchBtn');
@@ -1215,6 +1247,15 @@ function attachEvents() {
   updateMenuSelect.addEventListener('change', refreshUpdateDishOptions);
   updateWeekSelect.addEventListener('change', refreshUpdateDishOptions);
   updateDaySelect.addEventListener('change', refreshUpdateDishOptions);
+  adminApiBaseInput.addEventListener('input', () => {
+    const normalized = adminApiBaseInput.value.trim().replace(/\/+$/, '') || DEFAULT_API_BASE_URL;
+    adminApiBaseInput.value = normalized;
+    try {
+      localStorage.setItem(API_BASE_STORAGE_KEY, normalized);
+    } catch (_error) {
+      // Ignore storage write failures in locked-down browser contexts.
+    }
+  });
   extractPreviewBtn.addEventListener('click', handleExtractPreview);
   applyUpdateBtn.addEventListener('click', handleApplyUpdate);
   downloadPatchBtn.addEventListener('click', downloadPatchJson);
@@ -1292,6 +1333,18 @@ function validateRequiredSelectors() {
 function init() {
   validateRequiredSelectors();
   renderBootErrorsBanner();
+
+  const apiBaseInput = document.getElementById('adminApiBase');
+  if (apiBaseInput) {
+    let storedBase = '';
+    try {
+      storedBase = localStorage.getItem(API_BASE_STORAGE_KEY) || '';
+    } catch (_error) {
+      storedBase = '';
+    }
+    const resolvedBase = (storedBase || DEFAULT_API_BASE_URL).trim().replace(/\/+$/, '');
+    apiBaseInput.value = resolvedBase;
+  }
 
   if (!mealData.dinner || !Object.keys(mealData.dinner).length) {
     console.warn('Dinner menu data failed to load; week/day dropdowns cannot be populated.');

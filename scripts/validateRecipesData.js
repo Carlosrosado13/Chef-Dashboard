@@ -86,6 +86,28 @@ function validateRecipeObject(label, data) {
       return typeof value === 'string' || (value && typeof value === 'object');
     });
     assert(hasRenderable, `${label} week ${weekKey} must contain renderable recipes`);
+
+    recipeKeys.forEach((recipeKey) => {
+      const value = weekData[recipeKey];
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+
+      const steps = Array.isArray(value.steps) ? value.steps.map((step) => String(step || '').trim()).filter(Boolean) : [];
+      if (!steps.length) return;
+
+      const ingredients = Array.isArray(value.ingredients) ? value.ingredients : [];
+      const hasIngredient = ingredients.some((ingredient) => {
+        if (typeof ingredient === 'string') return ingredient.trim().length > 0;
+        if (!ingredient || typeof ingredient !== 'object') return false;
+        const original = String(ingredient.original || '').trim();
+        const name = String(ingredient.name || '').trim();
+        return Boolean(original || name);
+      });
+
+      assert(
+        hasIngredient,
+        `${label} week ${weekKey} recipe "${recipeKey}" has steps but no valid ingredient entries`
+      );
+    });
   });
 }
 
