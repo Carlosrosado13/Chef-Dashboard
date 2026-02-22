@@ -1,4 +1,4 @@
-// Chef Dashboard Script
+﻿// Chef Dashboard Script
 
 const dinnerCategoryConfig = [
   { key: 'Appetizer 1', label: 'Appetizer 1' },
@@ -120,13 +120,60 @@ const WEEKLY_DAY_KEYS = {
 
 function normalizeName(name) {
   if (!name) return '';
-  let cleaned = name.replace(/\([^)]*\)/g, '');
+  let cleaned = String(name).replace(/\([^)]*\)/g, '');
   cleaned = cleaned.replace(/[-,]/g, ' ');
   cleaned = cleaned.replace(/&amp;/g, 'and');
   cleaned = cleaned.replace(/\bwith\b/gi, ' ');
   cleaned = cleaned.replace(/\band\b/gi, ' ');
   cleaned = cleaned.replace(/\s+/g, ' ').trim();
   return cleaned.toLowerCase();
+}
+
+function stringifyIngredientValue(value) {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object') {
+    if (typeof value.name === 'string') return value.name;
+    try {
+      return JSON.stringify(value);
+    } catch (_error) {
+      return '[invalid ingredient]';
+    }
+  }
+  return String(value);
+}
+
+function normalizeIngredientItem(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return {
+      name: stringifyIngredientValue(value.name),
+      qty: value.qty == null ? null : value.qty,
+      unit: value.unit == null ? '' : String(value.unit),
+      notes: value.notes == null ? '' : String(value.notes),
+    };
+  }
+
+  return {
+    name: stringifyIngredientValue(value),
+    qty: null,
+    unit: '',
+    notes: '',
+  };
+}
+
+function normalizeExtractedRecipe(recipeJson) {
+  const source = recipeJson && typeof recipeJson === 'object' ? recipeJson : {};
+  const ingredientsRaw = Array.isArray(source.ingredients) ? source.ingredients : [];
+  const stepsRaw = Array.isArray(source.steps) ? source.steps : [];
+
+  return {
+    ...source,
+    title: source.title == null ? '' : String(source.title),
+    servings: source.servings == null ? '' : String(source.servings),
+    ingredients: ingredientsRaw.map(normalizeIngredientItem),
+    steps: stepsRaw.map((step) => String(step == null ? '' : step)),
+    sourceUrl: source.sourceUrl == null ? '' : String(source.sourceUrl),
+  };
 }
 
 function stripHtml(value) {
@@ -146,8 +193,8 @@ function parseQuantityAndUnit(value) {
   if (!cleaned) return { quantity: null, unit: '' };
   if (/to taste/i.test(cleaned)) return { quantity: null, unit: 'to taste' };
 
-  const fractionMap = { '½': 0.5, '¼': 0.25, '¾': 0.75, '⅓': 1 / 3, '⅔': 2 / 3, '⅛': 0.125 };
-  const directFraction = cleaned.match(/^([½¼¾⅓⅔⅛])(?:\s+(.*))?$/);
+  const fractionMap = { '\u00BD': 0.5, '\u00BC': 0.25, '\u00BE': 0.75, '\u2153': 1 / 3, '\u2154': 2 / 3, '\u215B': 0.125 };
+  const directFraction = cleaned.match(/^([\u00BD\u00BC\u00BE\u2153\u2154\u215B])(?:\s+(.*))?$/);
   if (directFraction) {
     return {
       quantity: fractionMap[directFraction[1]],
@@ -163,7 +210,7 @@ function parseQuantityAndUnit(value) {
     };
   }
 
-  const mixedFraction = cleaned.match(/^(\d+)\s+([½¼¾⅓⅔⅛])(?:\s+(.*))?$/);
+  const mixedFraction = cleaned.match(/^(\d+)\s+([\u00BD\u00BC\u00BE\u2153\u2154\u215B])(?:\s+(.*))?$/);
   if (mixedFraction) {
     return {
       quantity: Number(mixedFraction[1]) + fractionMap[mixedFraction[2]],
@@ -197,7 +244,7 @@ function buildCategoryLookup() {
     ingredientCategories.forEach(category => {
       const items = entry.categories[category] || [];
       items.forEach(item => {
-        const key = normalizeName(item.name);
+        const key = normalizeName(stringifyIngredientValue(item && item.name != null ? item.name : item));
         if (key && !lookup[key]) lookup[key] = category;
       });
     });
@@ -251,14 +298,27 @@ function buildIngredientCheckerData() {
         const recipeKey = findRecipeKey(weekRecipes, dishName);
         if (!recipeKey) return;
 
-        parseIngredientsFromRecipeHtml(weekRecipes[recipeKey]).forEach(ingredient => {
-          const normalized = normalizeName(ingredient.name);
-          if (!normalized) return;
-          const category = categoryLookup[normalized] || 'other';
-          if (seenByCategory[category].has(normalized)) return;
-          seenByCategory[category].add(normalized);
-          categories[category].push(ingredient);
-        });
+        try {
+          parseIngredientsFromRecipeHtml(weekRecipes[recipeKey]).forEach(ingredient => {
+            const safeIngredient = normalizeIngredientItem(ingredient);
+            if (!safeIngredient.name) {
+              console.warn(`Invalid ingredient found in recipe "${recipeKey}" (week ${weekKey}, ${day})`);
+              return;
+            }
+            const normalized = normalizeName(safeIngredient.name);
+            if (!normalized) return;
+            const category = categoryLookup[normalized] || 'other';
+            if (seenByCategory[category].has(normalized)) return;
+            seenByCategory[category].add(normalized);
+            categories[category].push({
+              name: safeIngredient.name,
+              quantity: safeIngredient.qty,
+              unit: safeIngredient.unit,
+            });
+          });
+        } catch (error) {
+          console.warn(`Skipping ingredient processing for recipe "${recipeKey}" due to invalid data:`, error);
+        }
       });
 
       generatedMenu.push({ week: weekNumber, day, categories });
@@ -281,9 +341,11 @@ function validateIngredientCheckerData() {
     weekEntries.forEach(entry => {
       ingredientCategories.forEach(category => {
         (entry.categories[category] || []).forEach(item => {
-          const key = `${entry.day}|${category}|${normalizeName(item.name)}`;
+          const ingredientName = stringifyIngredientValue(item && item.name != null ? item.name : item);
+          const key = `${entry.day}|${category}|${normalizeName(ingredientName)}`;
           if (seen.has(key)) {
-            throw new Error(`Duplicate ingredient found in week ${week}: ${item.name} (${entry.day})`);
+            console.warn(`Duplicate ingredient found in week ${week}: ${ingredientName} (${entry.day})`);
+            return;
           }
           seen.add(key);
           count += 1;
@@ -492,7 +554,7 @@ function renderIngredients() {
   if (selectedMeal === 'lunch') {
     const msg = document.createElement('p');
     msg.className = 'no-results';
-    msg.textContent = 'Lunch ingredients checker coming next — we’ll add recipes first.';
+    msg.textContent = "Lunch ingredients checker coming next - we'll add recipes first.";
     ingredientsContainer.appendChild(msg);
     return;
   }
@@ -512,7 +574,20 @@ function renderIngredients() {
   let hasResults = false;
   for (const groupName in entry.categories) {
     if (!Object.prototype.hasOwnProperty.call(entry.categories, groupName)) continue;
-    const filtered = (entry.categories[groupName] || []).filter(item => item.name.toLowerCase().includes(searchTerm));
+    let filtered = [];
+    try {
+      filtered = (entry.categories[groupName] || []).filter(item => {
+        const ingredientName = stringifyIngredientValue(item && item.name != null ? item.name : item);
+        if (!ingredientName) {
+          console.warn(`Invalid ingredient value found in category "${groupName}"`, item);
+          return false;
+        }
+        return ingredientName.toLowerCase().includes(searchTerm);
+      });
+    } catch (error) {
+      console.warn(`Skipping invalid ingredients in category "${groupName}":`, error);
+      filtered = [];
+    }
     if (filtered.length === 0) continue;
 
     hasResults = true;
@@ -524,8 +599,9 @@ function renderIngredients() {
     const ul = document.createElement('ul');
     filtered.forEach(item => {
       const li = document.createElement('li');
-      const quantityStr = item.quantity ? `${item.quantity} ${item.unit || ''}`.trim() : '';
-      li.textContent = quantityStr ? `${quantityStr} — ${item.name}` : item.name;
+      const ingredientName = stringifyIngredientValue(item && item.name != null ? item.name : item);
+      const quantityStr = item && item.quantity ? `${item.quantity} ${item.unit || ''}`.trim() : '';
+      li.textContent = quantityStr ? `${quantityStr} - ${ingredientName}` : ingredientName;
       ul.appendChild(li);
     });
 
@@ -619,16 +695,18 @@ function updateDishId(menu, week, day, slot) {
 }
 
 function buildGeneratedRecipeHtml(recipeJson) {
-  const title = escapeHtml(recipeJson.title || 'Untitled Recipe');
-  const ingredients = Array.isArray(recipeJson.ingredients) ? recipeJson.ingredients : [];
-  const steps = Array.isArray(recipeJson.steps) ? recipeJson.steps : [];
+  const normalizedRecipe = normalizeExtractedRecipe(recipeJson);
+  const title = escapeHtml(normalizedRecipe.title || 'Untitled Recipe');
+  const ingredients = normalizedRecipe.ingredients;
+  const steps = normalizedRecipe.steps;
 
   const ingredientRows = ingredients
     .map(item => {
-      const qty = item.qty == null ? '' : String(item.qty);
-      const unit = item.unit ? String(item.unit) : '';
-      const notes = item.notes ? ` (${String(item.notes)})` : '';
-      const ingredientName = `${String(item.name || '')}${notes}`.trim();
+      const safeItem = normalizeIngredientItem(item);
+      const qty = safeItem.qty == null ? '' : String(safeItem.qty);
+      const unit = safeItem.unit ? String(safeItem.unit) : '';
+      const notes = safeItem.notes ? ` (${String(safeItem.notes)})` : '';
+      const ingredientName = `${safeItem.name}${notes}`.trim();
       return `<tr><td>${escapeHtml(ingredientName)}</td><td>${escapeHtml(`${qty} ${unit}`.trim())}</td></tr>`;
     })
     .join('');
@@ -641,12 +719,13 @@ function buildGeneratedRecipeHtml(recipeJson) {
 }
 
 function isValidExtractedRecipe(recipeJson) {
+  const normalizedRecipe = normalizeExtractedRecipe(recipeJson);
   return Boolean(
-    recipeJson &&
-    typeof recipeJson === 'object' &&
-    typeof recipeJson.title === 'string' &&
-    Array.isArray(recipeJson.ingredients) &&
-    Array.isArray(recipeJson.steps)
+    normalizedRecipe &&
+    typeof normalizedRecipe === 'object' &&
+    typeof normalizedRecipe.title === 'string' &&
+    Array.isArray(normalizedRecipe.ingredients) &&
+    Array.isArray(normalizedRecipe.steps)
   );
 }
 
@@ -670,6 +749,7 @@ function buildRecipePatchPayload() {
   if (!isValidExtractedRecipe(extractedRecipeDraft)) {
     throw new Error('Extracted recipe is malformed. Need title, ingredients[], and steps[].');
   }
+  const normalizedDraft = normalizeExtractedRecipe(extractedRecipeDraft);
 
   return {
     patchVersion: 1,
@@ -682,12 +762,12 @@ function buildRecipePatchPayload() {
     oldDishName: selected.dataset.dishName || '',
     oldRecipeKey: selected.dataset.recipeKey || '',
     recipeData: {
-      title: extractedRecipeDraft.title || '',
-      servings: extractedRecipeDraft.servings || '',
-      ingredients: Array.isArray(extractedRecipeDraft.ingredients) ? extractedRecipeDraft.ingredients : [],
-      steps: Array.isArray(extractedRecipeDraft.steps) ? extractedRecipeDraft.steps : [],
-      sourceUrl: extractedRecipeDraft.sourceUrl || document.getElementById('recipeUrlInput').value.trim(),
-      generatedHtml: generatedRecipeHtmlDraft || buildGeneratedRecipeHtml(extractedRecipeDraft),
+      title: normalizedDraft.title || '',
+      servings: normalizedDraft.servings || '',
+      ingredients: normalizedDraft.ingredients || [],
+      steps: normalizedDraft.steps || [],
+      sourceUrl: normalizedDraft.sourceUrl || document.getElementById('recipeUrlInput').value.trim(),
+      generatedHtml: generatedRecipeHtmlDraft || buildGeneratedRecipeHtml(normalizedDraft),
     },
   };
 }
@@ -711,28 +791,30 @@ function downloadPatchJson() {
 }
 
 function renderExtractPreview(recipeJson) {
+  const normalizedRecipe = normalizeExtractedRecipe(recipeJson);
   const titleEl = document.getElementById('previewTitle');
   const ingredientsEl = document.getElementById('previewIngredients');
   const stepsEl = document.getElementById('previewSteps');
   const generatedEl = document.getElementById('previewGenerated');
   if (!titleEl || !ingredientsEl || !stepsEl || !generatedEl) return;
 
-  titleEl.innerHTML = `<h4>${escapeHtml(recipeJson.title || 'Untitled')}</h4>`;
+  titleEl.innerHTML = `<h4>${escapeHtml(normalizedRecipe.title || 'Untitled')}</h4>`;
 
-  const ingredients = Array.isArray(recipeJson.ingredients) ? recipeJson.ingredients : [];
+  const ingredients = normalizedRecipe.ingredients;
   ingredientsEl.innerHTML = `<h4>Ingredients</h4><ul>${ingredients
     .map(item => {
-      const qty = item.qty == null ? '' : `${item.qty}`;
-      const unit = item.unit || '';
-      const notes = item.notes ? ` (${item.notes})` : '';
-      return `<li>${escapeHtml(`${qty} ${unit}`.trim())} ${escapeHtml(item.name || '')}${escapeHtml(notes)}</li>`;
+      const safeItem = normalizeIngredientItem(item);
+      const qty = safeItem.qty == null ? '' : `${safeItem.qty}`;
+      const unit = safeItem.unit || '';
+      const notes = safeItem.notes ? ` (${safeItem.notes})` : '';
+      return `<li>${escapeHtml(`${qty} ${unit}`.trim())} ${escapeHtml(safeItem.name || '')}${escapeHtml(notes)}</li>`;
     })
     .join('')}</ul>`;
 
-  const steps = Array.isArray(recipeJson.steps) ? recipeJson.steps : [];
+  const steps = normalizedRecipe.steps;
   stepsEl.innerHTML = `<h4>Steps</h4><ol>${steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}</ol>`;
 
-  generatedRecipeHtmlDraft = buildGeneratedRecipeHtml(recipeJson);
+  generatedRecipeHtmlDraft = buildGeneratedRecipeHtml(normalizedRecipe);
   generatedEl.textContent = generatedRecipeHtmlDraft;
 }
 
@@ -798,7 +880,7 @@ async function handleExtractPreview() {
       const errorText = await response.text();
       throw new Error(`Extract failed (${response.status}): ${errorText}`);
     }
-    const recipeJson = await response.json();
+    const recipeJson = normalizeExtractedRecipe(await response.json());
     if (!isValidExtractedRecipe(recipeJson)) {
       throw new Error('Backend returned malformed recipe JSON (title/ingredients/steps required).');
     }
