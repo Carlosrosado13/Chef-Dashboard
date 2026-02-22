@@ -45,7 +45,7 @@ const menuOverviewData = {
       "Dessert": "Espresso Chocolate Tart (GF)"
     },
     "Friday": {
-      "Appetizer 1": "Hot Appetizer: Crab & Corn Fritter with Smoked Paprika Aioli and Greens",
+      "Appetizer 1": "Crispy Corn And Crab Fritters With Spicy Mayo",
       "Appetizer 2": "Cold Appetizer: Red Cabbage Slaw (GF/DF)",
       "Elevated": "Seared Salmon Filet, tomato olive relish (GF/DF)",
       "Traditional": "Slow-Roasted Pork Loin, Mushroom Cream Sauce (GF)",
