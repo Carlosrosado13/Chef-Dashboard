@@ -130,6 +130,8 @@ async function handleApply(request, env) {
   if (dryRun) {
     return json({
       ok: true,
+      commitSha: null,
+      message: 'Recipe validation succeeded (dry run)',
       dryRun: true,
       path: targetPath,
       validation: 'passed',
@@ -149,6 +151,7 @@ async function handleApply(request, env) {
   return json({
     ok: true,
     commitSha: commit.commit?.sha || null,
+    message: 'Recipe updated successfully',
     commitUrl: commit.commit?.html_url || null,
     url: commit.commit?.html_url || null,
     path: targetPath,

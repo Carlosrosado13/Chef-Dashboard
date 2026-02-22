@@ -856,9 +856,14 @@ async function handleApplyUpdate() {
     } catch (_error) {
       result = { error: rawText || 'Non-JSON response from backend' };
     }
+    console.log('Apply response:', result);
 
-    if (!response.ok || !result || result.ok !== true) {
+    if (!response.ok) {
       throw new Error(result?.error || `Apply failed (${response.status})`);
+    }
+
+    if (!result || result.ok !== true) {
+      throw new Error(result?.error || 'Unknown error');
     }
 
     if (dryRun) {
@@ -867,6 +872,9 @@ async function handleApplyUpdate() {
     }
 
     const sha = result.commitSha ? `Commit: ${result.commitSha}` : 'Commit created.';
+    if (result.commitSha) {
+      console.log('Apply commitSha:', result.commitSha);
+    }
     const url = result.url || result.commitUrl || '';
     const suffix = url ? ` ${url}` : '';
     setUpdateStatus(`${sha}.${suffix} GitHub Pages may take 1-3 minutes; hard refresh (Ctrl+F5).`, false);
