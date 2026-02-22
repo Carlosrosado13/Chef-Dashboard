@@ -577,6 +577,63 @@ function buildGeneratedRecipeHtml(recipeJson) {
   return `<h2>${title}</h2><h3>Ingredients</h3><table><thead><tr><th>Ingredient</th><th>Amount</th></tr></thead><tbody>${ingredientRows}</tbody></table><h3>Method</h3><ol type="1">${stepRows}</ol>`;
 }
 
+function getSelectedUpdateContext() {
+  const menu = document.getElementById('updateMenuSelect').value;
+  const week = document.getElementById('updateWeekSelect').value;
+  const day = document.getElementById('updateDaySelect').value;
+  const dishSelect = document.getElementById('updateDishSelect');
+  const selected = dishSelect && dishSelect.options.length ? dishSelect.options[dishSelect.selectedIndex] : null;
+  return { menu, week, day, dishSelect, selected };
+}
+
+function buildRecipePatchPayload() {
+  const { menu, week, day, selected } = getSelectedUpdateContext();
+  if (!selected || !selected.value) {
+    throw new Error('Select a dish slot before creating patch.');
+  }
+  if (!extractedRecipeDraft) {
+    throw new Error('Run Extract & Preview first.');
+  }
+
+  return {
+    patchVersion: 1,
+    createdAt: new Date().toISOString(),
+    menu,
+    week: Number(week),
+    day,
+    dishSlotId: selected.value,
+    dishSlotKey: selected.dataset.slot,
+    oldDishName: selected.dataset.dishName || '',
+    oldRecipeKey: selected.dataset.recipeKey || '',
+    recipeData: {
+      title: extractedRecipeDraft.title || '',
+      servings: extractedRecipeDraft.servings || '',
+      ingredients: Array.isArray(extractedRecipeDraft.ingredients) ? extractedRecipeDraft.ingredients : [],
+      steps: Array.isArray(extractedRecipeDraft.steps) ? extractedRecipeDraft.steps : [],
+      sourceUrl: extractedRecipeDraft.sourceUrl || document.getElementById('recipeUrlInput').value.trim(),
+      generatedHtml: generatedRecipeHtmlDraft || buildGeneratedRecipeHtml(extractedRecipeDraft),
+    },
+  };
+}
+
+function downloadPatchJson() {
+  try {
+    const patch = buildRecipePatchPayload();
+    const blob = new Blob([JSON.stringify(patch, null, 2)], { type: 'application/json' });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = `recipe_patch_${patch.menu}_week${patch.week}_${patch.day}_${patch.dishSlotKey}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(href);
+    setUpdateStatus('Patch JSON downloaded. Run node er/applyRecipePatch.js <patch.json>.', false);
+  } catch (error) {
+    setUpdateStatus(error.message || String(error), true);
+  }
+}
+
 function renderExtractPreview(recipeJson) {
   const titleEl = document.getElementById('previewTitle');
   const ingredientsEl = document.getElementById('previewIngredients');
@@ -675,64 +732,9 @@ async function handleExtractPreview() {
 }
 
 async function handleApplyUpdate() {
-  const apiBase = getApiBaseUrl();
-  const adminSecret = document.getElementById('adminSecretInput').value.trim();
-  const menu = document.getElementById('updateMenuSelect').value;
-  const week = document.getElementById('updateWeekSelect').value;
-  const day = document.getElementById('updateDaySelect').value;
-  const dishSelect = document.getElementById('updateDishSelect');
-  const selected = dishSelect.options[dishSelect.selectedIndex];
-
-  if (!apiBase) {
-    setUpdateStatus('Backend API Base URL is required.', true);
-    return;
-  }
-  if (!adminSecret) {
-    setUpdateStatus('Admin secret is required for Apply Update.', true);
-    return;
-  }
-  if (!extractedRecipeDraft) {
-    setUpdateStatus('Run Extract & Preview first.', true);
-    return;
-  }
-  if (!selected || !selected.value) {
-    setUpdateStatus('Select a dish slot to update.', true);
-    return;
-  }
-  if (!selected.dataset.recipeKey) {
-    setUpdateStatus('Could not map selected dish to an existing recipe key.', true);
-    return;
-  }
-
-  const payload = {
-    menu,
-    week: Number(week),
-    day,
-    dishId: selected.value,
-    dishSlot: selected.dataset.slot,
-    dishName: selected.dataset.dishName,
-    recipeKey: selected.dataset.recipeKey,
-    recipeJson: extractedRecipeDraft,
-    generatedRecipeHtml: generatedRecipeHtmlDraft
-  };
-
-  setUpdateStatus('Applying update to repository...', false);
   try {
-    const response = await fetch(`${apiBase}/apply`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-admin-secret': adminSecret
-      },
-      body: JSON.stringify(payload)
-    });
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Apply failed (${response.status}): ${errorText}`);
-    }
-    const result = await response.json();
-    const commitRef = result.commitUrl || result.commitSha || 'success';
-    setUpdateStatus(`Update applied: ${commitRef}`, false);
+    buildRecipePatchPayload();
+    setUpdateStatus('Apply is local: click "Download Patch JSON", then run node er/applyRecipePatch.js <patch.json>.', false);
   } catch (error) {
     setUpdateStatus(error.message || String(error), true);
   }
@@ -879,6 +881,7 @@ function attachEvents() {
   const updateDaySelect = document.getElementById('updateDaySelect');
   const extractPreviewBtn = document.getElementById('extractPreviewBtn');
   const applyUpdateBtn = document.getElementById('applyUpdateBtn');
+  const downloadPatchBtn = document.getElementById('downloadPatchBtn');
 
   weekSelect.addEventListener('change', () => {
     syncExportWeekWithMainWeek();
@@ -914,6 +917,7 @@ function attachEvents() {
   updateDaySelect.addEventListener('change', refreshUpdateDishOptions);
   extractPreviewBtn.addEventListener('click', handleExtractPreview);
   applyUpdateBtn.addEventListener('click', handleApplyUpdate);
+  downloadPatchBtn.addEventListener('click', downloadPatchJson);
 }
 
 function requireElement(id) {
@@ -948,7 +952,6 @@ function validateRequiredSelectors() {
     'downloadCombinedInventoryMissingBtn',
     'updateView',
     'adminApiBase',
-    'adminSecretInput',
     'updateMenuSelect',
     'updateWeekSelect',
     'updateDaySelect',
@@ -956,6 +959,7 @@ function validateRequiredSelectors() {
     'recipeUrlInput',
     'extractPreviewBtn',
     'applyUpdateBtn',
+    'downloadPatchBtn',
     'updateStatus',
     'previewTitle',
     'previewIngredients',

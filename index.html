@@ -12,10 +12,16 @@
   <script src="data_add.js"></script>
   <script src="menu_overview.js"></script>
   <script src="lunch_menu_data.js"></script>
-  <script src="recipeslunch.js"></script>
   <script src="dinner_menu_data.js"></script>
-  <!-- Recipe details for all dishes -->
-  <script src="recipes.js"></script>
+  <script>
+    (function loadRecipeScriptsWithVersion() {
+      var version = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+        ? String(Date.now())
+        : '20260222';
+      document.write('<script src="recipeslunch.js?v=' + version + '"><\\/script>');
+      document.write('<script src="recipes.js?v=' + version + '"><\\/script>');
+    })();
+  </script>
   <!-- Additional recipe details for Weeks 3 and 4 -->
   <script src="recipes_add.js"></script>
 </head>
@@ -97,11 +103,8 @@
       <section class="update-panel" aria-label="Update recipes admin">
         <h2>Update Recipes</h2>
         <div class="update-grid">
-          <label for="adminApiBase">Backend API Base URL</label>
+          <label for="adminApiBase">Extract API Base URL</label>
           <input type="url" id="adminApiBase" placeholder="https://your-worker.example.workers.dev" />
-
-          <label for="adminSecretInput">Admin Secret</label>
-          <input type="password" id="adminSecretInput" placeholder="Required for Apply Update" />
 
           <label for="updateMenuSelect">Menu</label>
           <select id="updateMenuSelect">
@@ -138,6 +141,7 @@
         <div class="update-actions">
           <button id="extractPreviewBtn" type="button" class="tab-button active">Extract & Preview</button>
           <button id="applyUpdateBtn" type="button" class="tab-button">Apply Update</button>
+          <button id="downloadPatchBtn" type="button" class="tab-button">Download Patch JSON</button>
         </div>
 
         <p id="updateStatus" class="update-status" aria-live="polite"></p>
