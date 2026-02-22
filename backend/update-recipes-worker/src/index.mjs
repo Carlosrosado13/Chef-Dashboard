@@ -78,24 +78,27 @@ async function handleExtract(request) {
 
   const html = await response.text();
   const jsonLdRecipe = extractPrimaryRecipeFromJsonLd(html);
+  if (!jsonLdRecipe) {
+    return json({ ok: false, error: 'No Recipe JSON-LD found at URL; cannot extract structured recipe data.' }, 422);
+  }
 
   const ingredientLines = extractIngredientStrings(html, jsonLdRecipe);
-  const ingredients = ingredientLines
-    .map(parseIngredientLine)
-    .filter((item) => item && item.name && item.name.trim());
 
-  if (!ingredients.length) {
+  if (!ingredientLines.length) {
     return json({ ok: false, error: 'No ingredients could be extracted from the URL' }, 422);
   }
 
   const steps = normalizeRecipeInstructions(jsonLdRecipe?.recipeInstructions);
+  if (!steps.length) {
+    return json({ ok: false, error: 'No recipe instructions found in structured data.' }, 422);
+  }
   const title = sanitizeText(jsonLdRecipe?.name || extractTitleFromHtml(html) || 'Untitled Recipe');
   const servings = normalizeServings(jsonLdRecipe?.recipeYield);
 
   const extractedRecipe = {
     title,
     servings,
-    ingredients,
+    ingredients: ingredientLines,
     steps,
     sourceUrl,
   };
@@ -105,7 +108,9 @@ async function handleExtract(request) {
 }
 
 async function handleApply(request, env) {
-  requireEnv(env, ['ADMIN_SECRET', 'GITHUB_TOKEN', 'GITHUB_OWNER', 'GITHUB_REPO']);
+  if (!env.ADMIN_SECRET) {
+    return json({ ok: false, error: 'ADMIN_SECRET is not configured' }, 500);
+  }
 
   const providedSecret = request.headers.get('x-admin-secret') || '';
   if (providedSecret !== env.ADMIN_SECRET) {
@@ -139,6 +144,16 @@ async function handleApply(request, env) {
   const normalizedRecipe = normalizeRecipePayload(recipeInput);
   if (!normalizedRecipe.ingredients.length) {
     return json({ ok: false, error: 'Empty ingredients - extraction failed' }, 422);
+  }
+
+  if (!env.GITHUB_TOKEN || !env.GITHUB_OWNER || !env.GITHUB_REPO) {
+    return json({
+      ok: true,
+      status: 'patch_required',
+      message: 'GitHub commit is not configured in Worker env; use local patch apply workflow.',
+      command: 'node scripts/applyRecipePatch.js <patch.json>',
+      dishSlotId,
+    }, 200);
   }
 
   const targetPath = menu === 'dinner' ? 'recipes.js' : 'recipeslunch.js';
@@ -656,16 +671,37 @@ function generateRecipeHtml(recipe) {
   const steps = Array.isArray(recipe.steps) ? recipe.steps : [];
 
   const ingredientRows = ingredients.map((item) => {
-    const qty = item.qty == null ? '' : String(item.qty);
-    const unit = item.unit ? String(item.unit) : '';
+    const normalized = normalizeIngredientForHtml(item);
+    const qty = normalized.qty == null ? '' : String(normalized.qty);
+    const unit = normalized.unit ? String(normalized.unit) : '';
     const amount = `${qty} ${unit}`.trim();
-    const notes = item.notes ? ` (${String(item.notes)})` : '';
-    return `<tr><td>${escapeHtml(item.name || '')}${escapeHtml(notes)}</td><td>${escapeHtml(amount)}</td></tr>`;
+    const notes = normalized.notes ? ` (${String(normalized.notes)})` : '';
+    return `<tr><td>${escapeHtml(normalized.name || '')}${escapeHtml(notes)}</td><td>${escapeHtml(amount)}</td></tr>`;
   }).join('');
 
   const stepRows = steps.map((step) => `<li><p>${escapeHtml(step)}</p></li>`).join('');
 
   return `<h2>${title}</h2><h3>Ingredients</h3><table><thead><tr><th>Ingredient</th><th>Amount</th></tr></thead><tbody>${ingredientRows}</tbody></table><h3>Method</h3><ol type="1">${stepRows}</ol>`;
+}
+
+function normalizeIngredientForHtml(value) {
+  if (typeof value === 'string') {
+    const parsed = parseIngredientLine(value);
+    if (parsed) return parsed;
+    return { name: sanitizeText(value), qty: null, unit: '', notes: '' };
+  }
+  if (value && typeof value === 'object') {
+    const name = sanitizeText(value.name || value.original || value.raw || '');
+    if (name) {
+      return {
+        name,
+        qty: value.qty == null ? null : value.qty,
+        unit: sanitizeText(value.unit || ''),
+        notes: sanitizeText(value.notes || ''),
+      };
+    }
+  }
+  return { name: '', qty: null, unit: '', notes: '' };
 }
 
 function uniqueStrings(values) {

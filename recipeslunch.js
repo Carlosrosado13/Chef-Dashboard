@@ -326,5 +326,9 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = { recipesLunchData };
 }
 
-window.recipesLunchData = recipesLunchData;
-globalThis.recipesLunchData = recipesLunchData;
+if (typeof window !== "undefined") {
+  window.recipesLunchData = recipesLunchData;
+}
+if (typeof globalThis !== "undefined") {
+  globalThis.recipesLunchData = recipesLunchData;
+}

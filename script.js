@@ -86,10 +86,12 @@ const mealData = {
   dinner: dinnerMenuDataStore,
   lunch: lunchMenuDataStore
 };
-console.log('recipesData global:', window.recipesData);
-console.log('recipesLunchData global:', window.recipesLunchData);
-const dinnerRecipesGlobal = window.recipesData ?? null;
-const lunchRecipesGlobal = window.recipesLunchData ?? null;
+const dinnerRecipesGlobal = resolveGlobalValue('recipesData') || null;
+const lunchRecipesGlobal = resolveGlobalValue('recipesLunchData') || null;
+console.log('recipesData global (window):', window.recipesData ?? null);
+console.log('recipesLunchData global (window):', window.recipesLunchData ?? null);
+console.log('recipesData resolved:', dinnerRecipesGlobal);
+console.log('recipesLunchData resolved:', lunchRecipesGlobal);
 if (!dinnerRecipesGlobal) {
   console.error('Dinner recipes missing');
 }
@@ -118,9 +120,22 @@ const WEEKLY_DAY_KEYS = {
   Sunday: ['Sunday', 'Sun']
 };
 
+function asIngredientLine(value) {
+  if (value == null) return '';
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value).trim();
+  if (typeof value === 'object') {
+    if (typeof value.name === 'string' && value.name.trim()) return value.name.trim();
+    if (typeof value.original === 'string' && value.original.trim()) return value.original.trim();
+    if (typeof value.raw === 'string' && value.raw.trim()) return value.raw.trim();
+    if (typeof value.text === 'string' && value.text.trim()) return value.text.trim();
+  }
+  return '';
+}
+
 function normalizeName(name) {
   if (!name) return '';
-  let cleaned = String(name).replace(/\([^)]*\)/g, '');
+  let cleaned = asIngredientLine(name).replace(/\([^)]*\)/g, '');
   cleaned = cleaned.replace(/[-,]/g, ' ');
   cleaned = cleaned.replace(/&amp;/g, 'and');
   cleaned = cleaned.replace(/\bwith\b/gi, ' ');
@@ -130,23 +145,14 @@ function normalizeName(name) {
 }
 
 function stringifyIngredientValue(value) {
-  if (value == null) return '';
-  if (typeof value === 'string') return value;
-  if (typeof value === 'object') {
-    if (typeof value.name === 'string') return value.name;
-    try {
-      return JSON.stringify(value);
-    } catch (_error) {
-      return '[invalid ingredient]';
-    }
-  }
-  return String(value);
+  return asIngredientLine(value);
 }
 
 function normalizeIngredientItem(value) {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const fallback = asIngredientLine(value);
     return {
-      name: stringifyIngredientValue(value.name),
+      name: stringifyIngredientValue(value.name) || fallback,
       qty: value.qty == null ? null : value.qty,
       unit: value.unit == null ? '' : String(value.unit),
       notes: value.notes == null ? '' : String(value.notes),
@@ -170,7 +176,9 @@ function normalizeExtractedRecipe(recipeJson) {
     ...source,
     title: source.title == null ? '' : String(source.title),
     servings: source.servings == null ? '' : String(source.servings),
-    ingredients: ingredientsRaw.map(normalizeIngredientItem),
+    ingredients: ingredientsRaw
+      .map(normalizeIngredientItem)
+      .filter((item) => item && asIngredientLine(item.name)),
     steps: stepsRaw.map((step) => String(step == null ? '' : step)),
     sourceUrl: source.sourceUrl == null ? '' : String(source.sourceUrl),
   };
@@ -189,7 +197,7 @@ function stripHtml(value) {
 }
 
 function parseQuantityAndUnit(value) {
-  const cleaned = stripHtml(value).replace(/,/g, '.');
+  const cleaned = stripHtml(asIngredientLine(value)).replace(/,/g, '.');
   if (!cleaned) return { quantity: null, unit: '' };
   if (/to taste/i.test(cleaned)) return { quantity: null, unit: 'to taste' };
 
@@ -228,7 +236,7 @@ function parseIngredientsFromRecipeHtml(recipeHtml) {
   trMatches.forEach(row => {
     const tdMatches = row.match(/<td[\s\S]*?<\/td>/gi) || [];
     if (tdMatches.length < 2) return;
-    const ingredientName = stripHtml(tdMatches[0]);
+    const ingredientName = asIngredientLine(stripHtml(tdMatches[0]));
     if (!ingredientName || /^ingredient$/i.test(ingredientName)) return;
     const amount = parseQuantityAndUnit(tdMatches[1]);
     rows.push({ name: ingredientName, quantity: amount.quantity, unit: amount.unit });
@@ -958,6 +966,13 @@ async function handleApplyUpdate() {
 
     if (!data || data.ok !== true) {
       throw new Error(data?.error || rawText || 'Unknown error (no body)');
+    }
+
+    if (data.status === 'patch_required') {
+      downloadPatchJson();
+      const command = data.command || 'node scripts/applyRecipePatch.js <patch.json>';
+      setUpdateStatus(`Patch generated. To apply: ${command} then git add/commit/push.`, false);
+      return;
     }
 
     if (dryRun) {

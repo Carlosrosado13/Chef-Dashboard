@@ -5,6 +5,7 @@
   "scripts": {
     "extract:ingredients": "node scripts/extract_all_ingredients_to_excel.js",
     "validate:recipes": "node scripts/validateRecipesData.js",
+    "smoke:recipes": "node scripts/smokeRecipesLoad.js",
     "apply:recipe-patch": "node scripts/applyRecipePatch.js"
   },
   "devDependencies": {
