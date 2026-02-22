@@ -923,7 +923,7 @@ async function handleApplyUpdate() {
 
     setUpdateStatus(dryRun ? 'Running apply dry-run...' : 'Applying update and committing to GitHub...', false);
 
-    const response = await fetch(applyUrl, {
+    const res = await fetch(applyUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -932,29 +932,26 @@ async function handleApplyUpdate() {
       body: JSON.stringify(payload)
     });
 
-    let result = null;
-    let rawText = '';
+    const contentType = res.headers.get('content-type') || '';
+    const rawText = await res.text();
+    let data = null;
     try {
-      result = await response.clone().json();
-      rawText = JSON.stringify(result);
-    } catch (_jsonError) {
-      rawText = await response.text();
-      try {
-        result = rawText ? JSON.parse(rawText) : null;
-      } catch (_parseError) {
-        result = null;
-      }
-    }
-    console.log('Apply response status:', response.status);
-    console.log('Apply response:', result);
-    console.log('Apply response body:', rawText);
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${rawText || result?.error || 'No response body'}`);
+      data = JSON.parse(rawText);
+    } catch (_error) {
+      data = null;
     }
 
-    if (!result || result.ok !== true) {
-      throw new Error(result?.error || rawText || 'No response body');
+    console.log('Apply status:', res.status);
+    console.log('Apply content-type:', contentType);
+    console.log('Apply response raw:', rawText);
+    console.log('Apply response parsed:', data);
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${rawText}`);
+    }
+
+    if (!data || data.ok !== true) {
+      throw new Error(data?.error || rawText || 'Unknown error (no body)');
     }
 
     if (dryRun) {
@@ -962,11 +959,11 @@ async function handleApplyUpdate() {
       return;
     }
 
-    const sha = result.commitSha ? `Commit: ${result.commitSha}` : 'Commit created.';
-    if (result.commitSha) {
-      console.log('Apply commitSha:', result.commitSha);
+    const sha = data.commitSha ? `Commit: ${data.commitSha}` : 'Commit: n/a';
+    if (data.commitSha) {
+      console.log('Apply commitSha:', data.commitSha);
     }
-    const url = result.url || result.commitUrl || '';
+    const url = data.url || data.commitUrl || '';
     const suffix = url ? ` ${url}` : '';
     setUpdateStatus(`${sha}.${suffix} GitHub Pages may take 1-3 minutes; hard refresh (Ctrl+F5).`, false);
   } catch (error) {
