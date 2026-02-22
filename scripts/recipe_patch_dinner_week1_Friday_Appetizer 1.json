@@ -1,0 +1,75 @@
+{
+  "patchVersion": 1,
+  "createdAt": "2026-02-22T17:00:54.361Z",
+  "menu": "dinner",
+  "week": 1,
+  "day": "Friday",
+  "dishSlotId": "dinner:week1:Friday:Appetizer 1",
+  "dishSlotKey": "Appetizer 1",
+  "oldDishName": "Hot Appetizer: Crab & Corn Fritter with Smoked Paprika Aioli and Greens",
+  "oldRecipeKey": "Hot Appetizer: Crab & Sweet Corn Fritters with Smoked Chili Aioli",
+  "recipeData": {
+    "title": "Crispy Corn And Crab Fritters With Spicy Mayo",
+    "servings": "",
+    "ingredients": [
+      {
+        "original": "1  Egg"
+      },
+      {
+        "original": "1/3 c Milk"
+      },
+      {
+        "original": "1 tsp each: Lemon Zest and Lemon Juice"
+      },
+      {
+        "original": "1/4 tsp Tobasco (or cayenne or other hot sauce)"
+      },
+      {
+        "original": "1/2 c Cornstarch (aka cornflour)"
+      },
+      {
+        "original": "1/3 c All Purpose Flour (cake flour is an excellent sub)"
+      },
+      {
+        "original": "1 tsp Baking Powder"
+      },
+      {
+        "original": "1/4 c Red Pepper"
+      },
+      {
+        "original": "1/2 c Corn"
+      },
+      {
+        "original": "1/4 c Green Onions (aka spring onions, scallions or chives)"
+      },
+      {
+        "original": "1 c Crab Meat (packed, approx 1/2 lb or 250 g)"
+      },
+      {
+        "original": "Salt + Pepper to taste (I use 1/2 tsp of salt and 1/4 tsp pepper)"
+      },
+      {
+        "original": "Vegetable Oil (enough to fill frying pan 1/2 inch or 1 cm deep or enough to fill your deep fryer.)"
+      },
+      {
+        "original": "1 c Mayonnaise (Japanese kewpie mayonnaise is my favorite but any other plain, quality mayonnaise will work.)"
+      },
+      {
+        "original": "Either 2 tsp Wasabi, 1 tsp Lemon Zest and 1 tbsp Lemon Juice"
+      },
+      {
+        "original": "Or  2 tsp Sambal Oelek or Sriracha Sauce"
+      }
+    ],
+    "steps": [
+      "Beat egg and add milk, hot sauce, and lemon zest. Whisk until well blended.",
+      "In a separate bowl or measuring cup, add cornstarch, flour, and baking powder and mix well. Add to egg mixture and gently fold ingredients together without overmixing.",
+      "Add corn, diced red pepper, green onions, salt, and pepper, and stir to mix. Then add crab and gently fold in.",
+      "Add enough vegetable oil to a medium to large frying pan to make it 1/2&quot; or 1 cm deep. Set it on the stove set to medium heat.",
+      "Once the oil is heated, drop heaping tablespoons of crab batter in gently to prevent splattering. Leave an inch or 2 of space between fritters to prevent them from sticking together. Once golden on one side (approx. 3-4 minutes), flip them over and fry until golden on the other side. Remove to a paper towel or cooling rack set over a tray and serve while still hot.",
+      ""
+    ],
+    "sourceUrl": "https://sabrinacurrie.com/crispy-corn-and-crab-fritters-with-spicy-mayo/",
+    "generatedHtml": "<h2>Crispy Corn And Crab Fritters With Spicy Mayo</h2><h3>Ingredients</h3><table><thead><tr><th>Ingredient</th><th>Amount</th></tr></thead><tbody><tr><td></td><td></td></tr><tr><td></td><td></td></tr><tr><td></td><td></td></tr><tr><td></td><td></td></tr><tr><td></td><td></td></tr><tr><td></td><td></td></tr><tr><td></td><td></td></tr><tr><td></td><td></td></tr><tr><td></td><td></td></tr><tr><td></td><td></td></tr><tr><td></td><td></td></tr><tr><td></td><td></td></tr><tr><td></td><td></td></tr><tr><td></td><td></td></tr><tr><td></td><td></td></tr><tr><td></td><td></td></tr></tbody></table><h3>Method</h3><ol type=\"1\"><li><p>Beat egg and add milk, hot sauce, and lemon zest. Whisk until well blended.</p></li><li><p>In a separate bowl or measuring cup, add cornstarch, flour, and baking powder and mix well. Add to egg mixture and gently fold ingredients together without overmixing.</p></li><li><p>Add corn, diced red pepper, green onions, salt, and pepper, and stir to mix. Then add crab and gently fold in.</p></li><li><p>Add enough vegetable oil to a medium to large frying pan to make it 1/2&amp;quot; or 1 cm deep. Set it on the stove set to medium heat.</p></li><li><p>Once the oil is heated, drop heaping tablespoons of crab batter in gently to prevent splattering. Leave an inch or 2 of space between fritters to prevent them from sticking together. Once golden on one side (approx. 3-4 minutes), flip them over and fry until golden on the other side. Remove to a paper towel or cooling rack set over a tray and serve while still hot.</p></li><li><p></p></li></ol>"
+  }
+}
