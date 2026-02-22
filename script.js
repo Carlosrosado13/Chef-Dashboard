@@ -880,7 +880,13 @@ async function handleExtractPreview() {
       const errorText = await response.text();
       throw new Error(`Extract failed (${response.status}): ${errorText}`);
     }
-    const recipeJson = normalizeExtractedRecipe(await response.json());
+    const extractResponse = await response.json();
+    console.log('Extract response:', extractResponse);
+    if (extractResponse && extractResponse.ok === false) {
+      throw new Error(extractResponse.error || 'Extract failed');
+    }
+    const recipePayload = extractResponse && extractResponse.extractedRecipe ? extractResponse.extractedRecipe : extractResponse;
+    const recipeJson = normalizeExtractedRecipe(recipePayload);
     if (!isValidExtractedRecipe(recipeJson)) {
       throw new Error('Backend returned malformed recipe JSON (title/ingredients/steps required).');
     }
@@ -960,12 +966,13 @@ async function handleApplyUpdate() {
     }
 
     const sha = data.commitSha ? `Commit: ${data.commitSha}` : 'Commit: n/a';
+    const file = data.updatedFile ? ` File: ${data.updatedFile}.` : '';
     if (data.commitSha) {
       console.log('Apply commitSha:', data.commitSha);
     }
     const url = data.url || data.commitUrl || '';
     const suffix = url ? ` ${url}` : '';
-    setUpdateStatus(`${sha}.${suffix} GitHub Pages may take 1-3 minutes; hard refresh (Ctrl+F5).`, false);
+    setUpdateStatus(`${sha}.${file}${suffix} GitHub Pages may take 1-3 minutes; hard refresh (Ctrl+F5).`, false);
   } catch (error) {
     setUpdateStatus(error.message || String(error), true);
   }

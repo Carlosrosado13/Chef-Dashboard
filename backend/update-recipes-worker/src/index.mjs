@@ -35,13 +35,13 @@ export default {
 
 async function handleExtract(request, env) {
   if (!env.OPENAI_API_KEY) {
-    return json({ error: 'OPENAI_API_KEY is not configured' }, 500);
+    return json({ ok: false, error: 'OPENAI_API_KEY is not configured' }, 500);
   }
 
   const body = await parseJsonBody(request);
   const sourceUrl = String(body.url || '').trim();
   if (!sourceUrl) {
-    return json({ error: 'url is required' }, 400);
+    return json({ ok: false, error: 'url is required' }, 400);
   }
 
   const pageResponse = await fetch(sourceUrl, {
@@ -52,33 +52,45 @@ async function handleExtract(request, env) {
   });
 
   if (!pageResponse.ok) {
-    return json({ error: `Failed to fetch source URL (${pageResponse.status})` }, 400);
+    return json({ ok: false, error: `Failed to fetch source URL (${pageResponse.status})` }, 400);
   }
 
   const html = await pageResponse.text();
   const readable = extractReadableText(html);
+  const ingredientStrings = extractIngredientStrings(html);
 
-  const extracted = await extractRecipeWithOpenAI({
+  const openAiRecipe = await extractRecipeWithOpenAI({
     apiKey: env.OPENAI_API_KEY,
     sourceUrl,
     readableText: readable,
   });
 
-  return json(extracted, 200);
+  const ingredients = ingredientStrings
+    .map(parseIngredientLine)
+    .filter((item) => item && item.name && item.name.trim());
+
+  const title = String(openAiRecipe.title || extractRecipeTitleFromJsonLd(html) || 'Untitled Recipe').trim();
+  const steps = Array.isArray(openAiRecipe.steps) ? openAiRecipe.steps.map((step) => String(step || '').trim()).filter(Boolean) : [];
+  const servings = String(openAiRecipe.servings || '').trim();
+
+  const extractedRecipe = {
+    title,
+    servings,
+    ingredients,
+    steps,
+    sourceUrl,
+  };
+  extractedRecipe.generatedHtml = generateRecipeHtml(extractedRecipe);
+
+  return json({ ok: true, extractedRecipe }, 200);
 }
 
 async function handleApply(request, env) {
   requireEnv(env, ['GITHUB_TOKEN', 'GITHUB_OWNER', 'GITHUB_REPO']);
 
   const providedSecret = request.headers.get('x-admin-secret') || '';
-  if (!env.ADMIN_SECRET) {
-    return json({ ok: false, error: 'ADMIN_SECRET is not configured' }, 500);
-  }
-  if (!providedSecret) {
-    return json({ ok: false, error: 'Unauthorized' }, 401);
-  }
-  if (providedSecret !== env.ADMIN_SECRET) {
-    return json({ ok: false, error: 'Forbidden' }, 403);
+  if (!env.ADMIN_SECRET || providedSecret !== env.ADMIN_SECRET) {
+    return json({ ok: false, error: 'Invalid admin secret' }, 403);
   }
 
   const url = new URL(request.url);
@@ -90,7 +102,7 @@ async function handleApply(request, env) {
   const dishSlotId = String(body.dishSlotId || body.dishId || '').trim();
   const dishSlot = String(body.dishSlot || '').trim();
   const dishName = String(body.dishName || '').trim();
-  const recipeKey = String(body.recipeKey || dishName || '').trim();
+  const recipeKey = String(body.recipeKey || '').trim();
   const recipeJson = body.extractedRecipe || body.recipeJson;
 
   if (!['lunch', 'dinner'].includes(menu)) {
@@ -99,22 +111,35 @@ async function handleApply(request, env) {
   if (!Number.isInteger(week) || week < 1 || week > 4) {
     return json({ ok: false, error: 'week must be 1..4' }, 422);
   }
-  if (!day || !dishSlotId || !recipeKey || !recipeJson || typeof recipeJson !== 'object') {
-    return json({ ok: false, error: 'day, dishSlotId, recipeKey, extractedRecipe are required' }, 422);
+  if (!day || !dishSlotId || !recipeJson || typeof recipeJson !== 'object') {
+    return json({ ok: false, error: 'day, dishSlotId, extractedRecipe are required' }, 422);
   }
   if (!isValidRecipePayload(recipeJson)) {
     return json({ ok: false, error: 'extractedRecipe must include title, ingredients[], and steps[]' }, 422);
   }
+  if (!hasNonEmptyIngredients(recipeJson.ingredients)) {
+    return json({ ok: false, error: 'Extracted ingredients empty; run Extract again or fix extractor' }, 422);
+  }
 
   const targetPath = menu === 'lunch' ? 'recipeslunch.js' : 'recipes.js';
-  const generatedHtml = generateRecipeHtml(recipeJson);
+  const normalizedRecipe = normalizeRecipePayload(recipeJson);
+  const generatedHtml = generateRecipeHtml(normalizedRecipe);
 
   const branch = env.GITHUB_BRANCH || 'main';
   const fileInfo = await githubGetFile(env, targetPath, branch);
+  const resolvedRecipeKey = resolveRecipeKeyForWeek({
+    fileText: fileInfo.content,
+    menu,
+    week,
+    preferredKeys: [recipeKey, dishName, normalizedRecipe.title],
+  });
+  if (!resolvedRecipeKey) {
+    return json({ ok: false, error: 'Could not resolve target recipe key for selected dishSlotId' }, 422);
+  }
   const updatedContent = replaceRecipeEntry({
     fileText: fileInfo.content,
     week,
-    recipeKey,
+    recipeKey: resolvedRecipeKey,
     menu,
     replacementHtml: generatedHtml,
   });
@@ -127,7 +152,7 @@ async function handleApply(request, env) {
     menu,
     fileText: updatedContent,
     week,
-    recipeKey,
+    recipeKey: resolvedRecipeKey,
   });
   if (!validation.ok) {
     return json({ ok: false, error: validation.error || 'Updated file failed validation' }, 422);
@@ -145,7 +170,7 @@ async function handleApply(request, env) {
     }, 200);
   }
 
-  const commitMessage = `Update ${menu} week ${week} ${day} ${dishSlot || dishName || dishSlotId}`;
+  const commitMessage = `Auto apply recipe update: ${menu} W${week} ${day} ${dishSlot || dishName || dishSlotId}`;
   const commit = await githubUpdateFile(env, {
     path: targetPath,
     branch,
@@ -160,7 +185,8 @@ async function handleApply(request, env) {
     message: 'Recipe updated successfully',
     commitUrl: commit.commit?.html_url || null,
     url: commit.commit?.html_url || null,
-    path: targetPath,
+    updatedFile: targetPath,
+    dishSlotId,
   }, 200);
 }
 
@@ -352,6 +378,224 @@ async function extractRecipeWithOpenAI({ apiKey, sourceUrl, readableText }) {
   return parsed;
 }
 
+function extractIngredientStrings(html) {
+  const fromJsonLd = extractIngredientsFromJsonLd(html);
+  if (fromJsonLd.length) {
+    return uniqueStrings(fromJsonLd);
+  }
+
+  const fallback = [];
+  const directSelectors = [
+    /<[^>]*class=["'][^"']*wprm-recipe-ingredient[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/gi,
+  ];
+  directSelectors.forEach((pattern) => {
+    let match;
+    while ((match = pattern.exec(html)) !== null) {
+      const text = sanitizeText(match[1] || '');
+      if (text) fallback.push(text);
+    }
+  });
+
+  const listContainerPatterns = [
+    /<[^>]*class=["'][^"']*recipe-ingredients[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/gi,
+    /<[^>]*class=["'][^"']*ingredients[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/gi,
+  ];
+  listContainerPatterns.forEach((containerPattern) => {
+    let containerMatch;
+    while ((containerMatch = containerPattern.exec(html)) !== null) {
+      const block = containerMatch[1] || '';
+      const liMatches = Array.from(block.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi));
+      liMatches.forEach((li) => {
+        const text = sanitizeText(li[1] || '');
+        if (text) fallback.push(text);
+      });
+    }
+  });
+
+  return uniqueStrings(fallback);
+}
+
+function extractIngredientsFromJsonLd(html) {
+  const results = [];
+  const scriptMatches = Array.from(html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi));
+  scriptMatches.forEach((match) => {
+    const raw = (match[1] || '').trim();
+    if (!raw) return;
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (_error) {
+      return;
+    }
+    flattenJsonLdRecipes(parsed).forEach((recipe) => {
+      const list = Array.isArray(recipe.recipeIngredient) ? recipe.recipeIngredient : [];
+      list.forEach((value) => {
+        const text = sanitizeText(String(value || ''));
+        if (text) results.push(text);
+      });
+    });
+  });
+  return results;
+}
+
+function extractRecipeTitleFromJsonLd(html) {
+  const scriptMatches = Array.from(html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi));
+  for (const match of scriptMatches) {
+    const raw = (match[1] || '').trim();
+    if (!raw) continue;
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (_error) {
+      continue;
+    }
+    const recipes = flattenJsonLdRecipes(parsed);
+    for (const recipe of recipes) {
+      const name = sanitizeText(String(recipe.name || ''));
+      if (name) return name;
+    }
+  }
+  return '';
+}
+
+function flattenJsonLdRecipes(value) {
+  const nodes = [];
+  const pushNode = (node) => {
+    if (!node || typeof node !== 'object') return;
+    nodes.push(node);
+    if (Array.isArray(node['@graph'])) {
+      node['@graph'].forEach(pushNode);
+    }
+  };
+
+  if (Array.isArray(value)) value.forEach(pushNode);
+  else pushNode(value);
+
+  return nodes.filter((node) => {
+    const type = node['@type'];
+    if (Array.isArray(type)) return type.some((item) => String(item).toLowerCase() === 'recipe');
+    return String(type || '').toLowerCase() === 'recipe';
+  });
+}
+
+function parseIngredientLine(line) {
+  const original = sanitizeText(String(line || ''));
+  if (!original) return null;
+
+  const fractionMap = {
+    '\u00bc': 0.25,
+    '\u00bd': 0.5,
+    '\u00be': 0.75,
+    '\u2153': 1 / 3,
+    '\u2154': 2 / 3,
+    '\u215b': 1 / 8,
+  };
+  const normalized = original.replace(/[\u00bc\u00bd\u00be\u2153\u2154\u215b]/g, (m) => ` ${fractionMap[m]} `).replace(/\s+/g, ' ').trim();
+  const tokens = normalized.split(' ').filter(Boolean);
+
+  const units = new Set([
+    'tsp', 'tsps', 'teaspoon', 'teaspoons',
+    'tbsp', 'tbsps', 'tablespoon', 'tablespoons',
+    'cup', 'cups',
+    'g', 'gram', 'grams',
+    'kg', 'kilogram', 'kilograms',
+    'lb', 'lbs', 'pound', 'pounds',
+    'oz', 'ounce', 'ounces',
+    'ml', 'milliliter', 'milliliters',
+    'l', 'liter', 'liters',
+    'clove', 'cloves',
+    'pinch', 'pinches',
+    'can', 'cans',
+    'pkg', 'package', 'packages',
+  ]);
+
+  let qty = null;
+  let unit = '';
+  let startIndex = 0;
+
+  if (tokens.length > 0 && /^(\d+(\.\d+)?|\d+\/\d+)$/.test(tokens[0])) {
+    qty = parseQtyToken(tokens[0]);
+    startIndex = 1;
+    if (tokens.length > 1 && /^\d+\/\d+$/.test(tokens[1])) {
+      qty += parseQtyToken(tokens[1]);
+      startIndex = 2;
+    }
+  }
+
+  if (tokens[startIndex] && units.has(tokens[startIndex].toLowerCase())) {
+    unit = tokens[startIndex];
+    startIndex += 1;
+  }
+
+  const remainder = tokens.slice(startIndex).join(' ').trim();
+  const name = remainder || original;
+
+  return {
+    name,
+    qty: Number.isFinite(qty) ? qty : null,
+    unit: unit || '',
+    notes: '',
+  };
+}
+
+function parseQtyToken(token) {
+  if (/^\d+\/\d+$/.test(token)) {
+    const [a, b] = token.split('/').map(Number);
+    if (b) return a / b;
+    return 0;
+  }
+  return Number(token);
+}
+
+function uniqueStrings(values) {
+  const seen = new Set();
+  const out = [];
+  values.forEach((value) => {
+    const text = sanitizeText(String(value || ''));
+    if (!text) return;
+    const key = text.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(text);
+  });
+  return out;
+}
+
+function normalizeRecipePayload(recipeJson) {
+  const safe = recipeJson && typeof recipeJson === 'object' ? recipeJson : {};
+  const ingredients = (Array.isArray(safe.ingredients) ? safe.ingredients : [])
+    .map((item) => {
+      if (typeof item === 'string') return parseIngredientLine(item);
+      if (!item || typeof item !== 'object') return null;
+      const name = sanitizeText(String(item.name || ''));
+      if (!name) return null;
+      return {
+        name,
+        qty: item.qty == null ? null : item.qty,
+        unit: item.unit == null ? '' : String(item.unit),
+        notes: item.notes == null ? '' : String(item.notes),
+      };
+    })
+    .filter((item) => item && item.name);
+
+  return {
+    title: sanitizeText(String(safe.title || 'Untitled Recipe')),
+    servings: sanitizeText(String(safe.servings || '')),
+    ingredients,
+    steps: (Array.isArray(safe.steps) ? safe.steps : []).map((step) => sanitizeText(String(step || ''))).filter(Boolean),
+    sourceUrl: String(safe.sourceUrl || ''),
+  };
+}
+
+function hasNonEmptyIngredients(ingredients) {
+  if (!Array.isArray(ingredients)) return false;
+  return ingredients.some((item) => {
+    if (typeof item === 'string') return Boolean(sanitizeText(item));
+    if (item && typeof item === 'object') return Boolean(sanitizeText(String(item.name || '')));
+    return false;
+  });
+}
+
 function extractReadableText(html) {
   const noScripts = html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
@@ -536,6 +780,41 @@ function validateUpdatedRecipeFile({ menu, fileText, week, recipeKey }) {
   }
 
   return { ok: true };
+}
+
+function resolveRecipeKeyForWeek({ fileText, menu, week, preferredKeys }) {
+  let data;
+  try {
+    data = evaluateRecipeScript(fileText, menu);
+  } catch (_error) {
+    return null;
+  }
+  if (!data || typeof data !== 'object') return null;
+
+  const weekData = data[String(week)] || data[week];
+  if (!weekData || typeof weekData !== 'object' || Array.isArray(weekData)) return null;
+
+  const recipeKeys = Object.keys(weekData);
+  if (!recipeKeys.length) return null;
+
+  const normalizedCandidates = (preferredKeys || [])
+    .map((value) => sanitizeText(String(value || '')).toLowerCase())
+    .filter(Boolean);
+
+  for (const candidate of normalizedCandidates) {
+    const exact = recipeKeys.find((key) => sanitizeText(key).toLowerCase() === candidate);
+    if (exact) return exact;
+  }
+
+  for (const candidate of normalizedCandidates) {
+    const includes = recipeKeys.find((key) => {
+      const keyNorm = sanitizeText(key).toLowerCase();
+      return keyNorm.includes(candidate) || candidate.includes(keyNorm);
+    });
+    if (includes) return includes;
+  }
+
+  return null;
 }
 
 function evaluateRecipeScript(fileText, menu) {
