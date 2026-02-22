@@ -597,6 +597,16 @@ function getApiBaseUrl() {
   return input ? input.value.trim().replace(/\/+$/, '') : '';
 }
 
+function getAdminSecret() {
+  const input = document.getElementById('adminSecretInput');
+  return input ? input.value.trim() : '';
+}
+
+function isApplyDryRunEnabled() {
+  const toggle = document.getElementById('applyDryRunToggle');
+  return Boolean(toggle && toggle.checked);
+}
+
 function setUpdateStatus(message, isError) {
   const status = document.getElementById('updateStatus');
   if (!status) return;
@@ -802,8 +812,64 @@ async function handleExtractPreview() {
 
 async function handleApplyUpdate() {
   try {
-    buildRecipePatchPayload();
-    setUpdateStatus('Apply is local: click "Download Patch JSON", run node scripts/applyRecipePatch.js <patch.json>, then git push. Hard refresh (Ctrl+F5) if changes do not appear immediately.', false);
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) {
+      throw new Error('Backend API Base URL is required.');
+    }
+
+    const adminSecret = getAdminSecret();
+    if (!adminSecret) {
+      throw new Error('Admin Secret is required for Apply Update.');
+    }
+
+    const patch = buildRecipePatchPayload();
+    const dryRun = isApplyDryRunEnabled();
+    const applyUrl = `${apiBase}/apply${dryRun ? '?dryRun=true' : ''}`;
+    const payload = {
+      menu: patch.menu === 'dinner' ? 'Dinner' : 'Lunch',
+      week: patch.week,
+      day: patch.day,
+      dishSlotId: patch.dishSlotId,
+      extractedRecipe: patch.recipeData,
+      dishId: patch.dishSlotId,
+      dishSlot: patch.dishSlotKey,
+      dishName: patch.oldDishName || '',
+      recipeKey: patch.oldRecipeKey || patch.oldDishName || '',
+      recipeJson: patch.recipeData,
+    };
+
+    setUpdateStatus(dryRun ? 'Running apply dry-run...' : 'Applying update and committing to GitHub...', false);
+
+    const response = await fetch(applyUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-secret': adminSecret
+      },
+      body: JSON.stringify(payload)
+    });
+
+    let result = null;
+    const rawText = await response.text();
+    try {
+      result = rawText ? JSON.parse(rawText) : {};
+    } catch (_error) {
+      result = { error: rawText || 'Non-JSON response from backend' };
+    }
+
+    if (!response.ok || !result || result.ok !== true) {
+      throw new Error(result?.error || `Apply failed (${response.status})`);
+    }
+
+    if (dryRun) {
+      setUpdateStatus('Dry run succeeded. Validation passed and no commit was made.', false);
+      return;
+    }
+
+    const sha = result.commitSha ? `Commit: ${result.commitSha}` : 'Commit created.';
+    const url = result.url || result.commitUrl || '';
+    const suffix = url ? ` ${url}` : '';
+    setUpdateStatus(`${sha}.${suffix} GitHub Pages may take 1-3 minutes; hard refresh (Ctrl+F5).`, false);
   } catch (error) {
     setUpdateStatus(error.message || String(error), true);
   }
@@ -1037,6 +1103,8 @@ function validateRequiredSelectors() {
     'downloadCombinedInventoryMissingBtn',
     'updateView',
     'adminApiBase',
+    'adminSecretInput',
+    'applyDryRunToggle',
     'updateMenuSelect',
     'updateWeekSelect',
     'updateDaySelect',

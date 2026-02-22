@@ -75,15 +75,17 @@ async function handleApply(request, env) {
     return json({ error: 'Unauthorized' }, 401);
   }
 
+  const url = new URL(request.url);
+  const dryRun = url.searchParams.get('dryRun') === 'true';
   const body = await parseJsonBody(request);
-  const menu = String(body.menu || '').toLowerCase();
+  const menu = String(body.menu || '').trim().toLowerCase();
   const week = Number(body.week);
   const day = String(body.day || '').trim();
-  const dishId = String(body.dishId || '').trim();
+  const dishSlotId = String(body.dishSlotId || body.dishId || '').trim();
   const dishSlot = String(body.dishSlot || '').trim();
   const dishName = String(body.dishName || '').trim();
-  const recipeKey = String(body.recipeKey || '').trim();
-  const recipeJson = body.recipeJson;
+  const recipeKey = String(body.recipeKey || dishName || '').trim();
+  const recipeJson = body.extractedRecipe || body.recipeJson;
 
   if (!['lunch', 'dinner'].includes(menu)) {
     return json({ error: 'menu must be lunch or dinner' }, 400);
@@ -91,8 +93,11 @@ async function handleApply(request, env) {
   if (!Number.isInteger(week) || week < 1 || week > 4) {
     return json({ error: 'week must be 1..4' }, 400);
   }
-  if (!day || !dishId || !recipeKey || !recipeJson || typeof recipeJson !== 'object') {
-    return json({ error: 'day, dishId, recipeKey, recipeJson are required' }, 400);
+  if (!day || !dishSlotId || !recipeKey || !recipeJson || typeof recipeJson !== 'object') {
+    return json({ error: 'day, dishSlotId, recipeKey, extractedRecipe are required' }, 400);
+  }
+  if (!isValidRecipePayload(recipeJson)) {
+    return json({ error: 'extractedRecipe must include title, ingredients[], and steps[]' }, 422);
   }
 
   const targetPath = menu === 'lunch' ? 'recipeslunch.js' : 'recipes.js';
@@ -112,7 +117,27 @@ async function handleApply(request, env) {
     return json({ error: 'No change detected for selected recipe entry' }, 400);
   }
 
-  const commitMessage = `Update ${menu} week ${week} ${day} ${dishSlot || dishName || dishId}`;
+  const validation = validateUpdatedRecipeFile({
+    menu,
+    fileText: updatedContent,
+    week,
+    recipeKey,
+  });
+  if (!validation.ok) {
+    return json({ error: validation.error || 'Updated file failed validation' }, 422);
+  }
+
+  if (dryRun) {
+    return json({
+      ok: true,
+      dryRun: true,
+      path: targetPath,
+      validation: 'passed',
+      updatedFile: updatedContent,
+    }, 200);
+  }
+
+  const commitMessage = `Update ${menu} week ${week} ${day} ${dishSlot || dishName || dishSlotId}`;
   const commit = await githubUpdateFile(env, {
     path: targetPath,
     branch,
@@ -125,6 +150,7 @@ async function handleApply(request, env) {
     ok: true,
     commitSha: commit.commit?.sha || null,
     commitUrl: commit.commit?.html_url || null,
+    url: commit.commit?.html_url || null,
     path: targetPath,
   }, 200);
 }
@@ -456,6 +482,91 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function isValidRecipePayload(recipeJson) {
+  return Boolean(
+    recipeJson &&
+    typeof recipeJson === 'object' &&
+    typeof recipeJson.title === 'string' &&
+    recipeJson.title.trim() &&
+    Array.isArray(recipeJson.ingredients) &&
+    Array.isArray(recipeJson.steps)
+  );
+}
+
+function validateUpdatedRecipeFile({ menu, fileText, week, recipeKey }) {
+  const expectedGlobalName = menu === 'lunch' ? 'recipesLunchData' : 'recipesData';
+  const globalPattern = new RegExp(`(?:window|globalThis)\\.${expectedGlobalName}\\s*=`);
+  if (!globalPattern.test(fileText)) {
+    return { ok: false, error: `${expectedGlobalName} global assignment missing (window/globalThis)` };
+  }
+
+  let data;
+  try {
+    data = evaluateRecipeScript(fileText, menu);
+  } catch (error) {
+    return { ok: false, error: `Updated ${expectedGlobalName} is invalid JavaScript: ${error.message}` };
+  }
+
+  if (!hasWeekLikeRecipeData(data)) {
+    return { ok: false, error: `${expectedGlobalName} structure is invalid` };
+  }
+
+  const weekData = data[String(week)] || data[week];
+  if (!weekData || typeof weekData !== 'object' || Array.isArray(weekData)) {
+    return { ok: false, error: `Week ${week} missing in ${expectedGlobalName}` };
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(weekData, recipeKey)) {
+    return { ok: false, error: `Recipe key "${recipeKey}" missing in week ${week}` };
+  }
+
+  if (typeof weekData[recipeKey] !== 'string') {
+    return { ok: false, error: `Recipe value for "${recipeKey}" is not a string` };
+  }
+
+  return { ok: true };
+}
+
+function evaluateRecipeScript(fileText, menu) {
+  const runtime = { module: { exports: {} }, exports: {} };
+  runtime.globalThis = runtime;
+  runtime.window = runtime;
+  runtime.self = runtime;
+
+  const evaluator = new Function(
+    'globalThis',
+    'window',
+    'self',
+    'module',
+    'exports',
+    `${fileText}
+return {
+  recipesData: typeof recipesData !== 'undefined' ? recipesData : undefined,
+  recipesLunchData: typeof recipesLunchData !== 'undefined' ? recipesLunchData : undefined
+};`
+  );
+
+  const result = evaluator(runtime, runtime, runtime, runtime.module, runtime.exports) || {};
+  if (menu === 'lunch') {
+    return runtime.recipesLunchData || runtime.module?.exports?.recipesLunchData || result.recipesLunchData || null;
+  }
+  return runtime.recipesData || result.recipesData || null;
+}
+
+function hasWeekLikeRecipeData(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+  const weekKeys = Object.keys(data).filter((key) => Number.isFinite(Number(String(key).replace(/[^\d]/g, ''))));
+  if (!weekKeys.length) return false;
+
+  return weekKeys.every((weekKey) => {
+    const weekData = data[weekKey];
+    if (!weekData || typeof weekData !== 'object' || Array.isArray(weekData)) return false;
+    const recipeKeys = Object.keys(weekData);
+    if (!recipeKeys.length) return false;
+    return recipeKeys.some((recipeKey) => typeof weekData[recipeKey] === 'string');
+  });
 }
 
 function requireEnv(env, keys) {

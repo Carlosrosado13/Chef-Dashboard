@@ -38,22 +38,26 @@ Request body:
 
 ```json
 {
-  "menu": "dinner",
+  "menu": "Dinner",
   "week": 1,
   "day": "Monday",
-  "dishId": "dinner:week1:Monday:Traditional",
+  "dishSlotId": "dinner:week1:Monday:Traditional",
   "dishSlot": "Traditional",
   "dishName": "Seared Hanger Steak with Bordelaise",
   "recipeKey": "Seared Hanger Steak with Bordelaise",
-  "recipeJson": { "title": "...", "servings": "...", "ingredients": [], "steps": [], "sourceUrl": "..." }
+  "extractedRecipe": { "title": "...", "servings": "...", "ingredients": [], "steps": [], "sourceUrl": "..." }
 }
 ```
 
 Behavior:
 - Validates admin secret.
 - Updates exactly one recipe entry in `recipes.js` or `recipeslunch.js`.
+- Validates updated JS contract (`window/globalThis.recipesData` or `recipesLunchData`) before commit.
 - Commits via GitHub API using backend token.
 - Returns commit SHA/URL.
+
+Dry run:
+- `POST /apply?dryRun=true` validates and returns `updatedFile` without committing.
 
 ## Required environment variables
 
@@ -65,6 +69,9 @@ Set these as Cloudflare worker secrets/vars:
 - `GITHUB_OWNER` (var)
 - `GITHUB_REPO` (var)
 - `GITHUB_BRANCH` (var, optional, default `main`)
+
+Suggested GitHub token scope:
+- Fine-grained PAT with repository `Contents: Read and write` on the target repo.
 
 ## Deploy
 
@@ -84,3 +91,4 @@ Set vars in `wrangler.toml` or dashboard:
 - `GITHUB_BRANCH`
 
 After deploy, copy worker URL and paste it into the frontend "Backend API Base URL" field in the Update Recipes tab.
+Enter `ADMIN_SECRET` in the Update tab's Admin Secret field before clicking Apply Update.
