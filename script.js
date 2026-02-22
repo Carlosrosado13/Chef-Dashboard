@@ -919,6 +919,7 @@ async function handleApplyUpdate() {
       recipeKey: patch.oldRecipeKey || patch.oldDishName || '',
       recipeJson: patch.recipeData,
     };
+    console.log('Apply payload:', payload);
 
     setUpdateStatus(dryRun ? 'Running apply dry-run...' : 'Applying update and committing to GitHub...', false);
 
@@ -932,20 +933,28 @@ async function handleApplyUpdate() {
     });
 
     let result = null;
-    const rawText = await response.text();
+    let rawText = '';
     try {
-      result = rawText ? JSON.parse(rawText) : {};
-    } catch (_error) {
-      result = { error: rawText || 'Non-JSON response from backend' };
+      result = await response.clone().json();
+      rawText = JSON.stringify(result);
+    } catch (_jsonError) {
+      rawText = await response.text();
+      try {
+        result = rawText ? JSON.parse(rawText) : null;
+      } catch (_parseError) {
+        result = null;
+      }
     }
+    console.log('Apply response status:', response.status);
     console.log('Apply response:', result);
+    console.log('Apply response body:', rawText);
 
     if (!response.ok) {
-      throw new Error(result?.error || `Apply failed (${response.status})`);
+      throw new Error(`HTTP ${response.status}: ${rawText || result?.error || 'No response body'}`);
     }
 
     if (!result || result.ok !== true) {
-      throw new Error(result?.error || 'Unknown error');
+      throw new Error(result?.error || rawText || 'No response body');
     }
 
     if (dryRun) {

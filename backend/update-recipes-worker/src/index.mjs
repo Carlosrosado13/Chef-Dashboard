@@ -26,9 +26,9 @@ export default {
         return await handleApply(request, env);
       }
 
-      return json({ error: 'Not found' }, 404);
+      return json({ ok: false, error: 'Not found' }, 404);
     } catch (error) {
-      return json({ error: error.message || String(error) }, 500);
+      return json({ ok: false, error: error.message || String(error) }, 500);
     }
   },
 };
@@ -71,8 +71,14 @@ async function handleApply(request, env) {
   requireEnv(env, ['GITHUB_TOKEN', 'GITHUB_OWNER', 'GITHUB_REPO']);
 
   const providedSecret = request.headers.get('x-admin-secret') || '';
-  if (!env.ADMIN_SECRET || providedSecret !== env.ADMIN_SECRET) {
-    return json({ error: 'Unauthorized' }, 401);
+  if (!env.ADMIN_SECRET) {
+    return json({ ok: false, error: 'ADMIN_SECRET is not configured' }, 500);
+  }
+  if (!providedSecret) {
+    return json({ ok: false, error: 'Unauthorized' }, 401);
+  }
+  if (providedSecret !== env.ADMIN_SECRET) {
+    return json({ ok: false, error: 'Forbidden' }, 403);
   }
 
   const url = new URL(request.url);
@@ -88,16 +94,16 @@ async function handleApply(request, env) {
   const recipeJson = body.extractedRecipe || body.recipeJson;
 
   if (!['lunch', 'dinner'].includes(menu)) {
-    return json({ error: 'menu must be lunch or dinner' }, 400);
+    return json({ ok: false, error: 'menu must be lunch or dinner' }, 422);
   }
   if (!Number.isInteger(week) || week < 1 || week > 4) {
-    return json({ error: 'week must be 1..4' }, 400);
+    return json({ ok: false, error: 'week must be 1..4' }, 422);
   }
   if (!day || !dishSlotId || !recipeKey || !recipeJson || typeof recipeJson !== 'object') {
-    return json({ error: 'day, dishSlotId, recipeKey, extractedRecipe are required' }, 400);
+    return json({ ok: false, error: 'day, dishSlotId, recipeKey, extractedRecipe are required' }, 422);
   }
   if (!isValidRecipePayload(recipeJson)) {
-    return json({ error: 'extractedRecipe must include title, ingredients[], and steps[]' }, 422);
+    return json({ ok: false, error: 'extractedRecipe must include title, ingredients[], and steps[]' }, 422);
   }
 
   const targetPath = menu === 'lunch' ? 'recipeslunch.js' : 'recipes.js';
@@ -114,7 +120,7 @@ async function handleApply(request, env) {
   });
 
   if (updatedContent === fileInfo.content) {
-    return json({ error: 'No change detected for selected recipe entry' }, 400);
+    return json({ ok: false, error: 'No change detected for selected recipe entry' }, 422);
   }
 
   const validation = validateUpdatedRecipeFile({
@@ -124,7 +130,7 @@ async function handleApply(request, env) {
     recipeKey,
   });
   if (!validation.ok) {
-    return json({ error: validation.error || 'Updated file failed validation' }, 422);
+    return json({ ok: false, error: validation.error || 'Updated file failed validation' }, 422);
   }
 
   if (dryRun) {
