@@ -133,6 +133,20 @@ function asIngredientLine(value) {
   return '';
 }
 
+function ingredientToDisplay(ing) {
+  if (typeof ing === 'string') return { name: ing.trim(), amount: '' };
+  if (!ing || typeof ing !== 'object') return { name: '', amount: '' };
+  const original = (ing.original || '').trim();
+  const name = (ing.name || '').trim();
+  const qty = ing.qty ?? '';
+  const unit = (ing.unit || '').trim();
+  const notes = (ing.notes || '').trim();
+  const amount = [qty, unit].filter(Boolean).join(' ').trim();
+  if (name) return { name: notes ? `${name} (${notes})` : name, amount };
+  if (original) return { name: original, amount: '' };
+  return { name: '', amount: '' };
+}
+
 function normalizeName(name) {
   if (!name) return '';
   let cleaned = asIngredientLine(name).replace(/\([^)]*\)/g, '');
@@ -407,10 +421,47 @@ function renderRecipe() {
 
   const bestKey = findRecipeKey(weekRecipes, selectedDish);
   if (bestKey) {
-    recipeDetails.innerHTML = weekRecipes[bestKey];
+    const recipeValue = weekRecipes[bestKey];
+    if (typeof recipeValue === 'string') {
+      recipeDetails.innerHTML = sanitizeRecipeHtmlIngredients(recipeValue);
+    } else if (recipeValue && typeof recipeValue === 'object') {
+      recipeDetails.innerHTML = buildGeneratedRecipeHtml(recipeValue);
+    } else {
+      recipeDetails.innerHTML = '<p>Recipe not available for the selected dish.</p>';
+    }
   } else {
     recipeDetails.innerHTML = '<p>Recipe not available for the selected dish.</p>';
   }
+}
+
+function sanitizeRecipeHtmlIngredients(recipeHtml) {
+  if (!recipeHtml || typeof recipeHtml !== 'string') return '<p>No ingredients found for this recipe.</p>';
+
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = recipeHtml;
+  const table = wrapper.querySelector('table');
+  if (!table) return recipeHtml;
+
+  const rows = Array.from(table.querySelectorAll('tbody tr'));
+  const keptRows = rows.filter((row) => {
+    const cells = Array.from(row.querySelectorAll('td')).map((cell) => stripHtml(cell.textContent || '').trim());
+    if (!cells.length) return false;
+    if (cells.length === 1) return Boolean(cells[0]);
+    return Boolean(cells[0] || cells[1] || cells.slice(2).some(Boolean));
+  });
+
+  rows.forEach((row) => {
+    if (!keptRows.includes(row)) row.remove();
+  });
+
+  if (!keptRows.length) {
+    const warning = document.createElement('p');
+    warning.className = 'no-ingredients-warning';
+    warning.textContent = 'No ingredients found for this recipe.';
+    table.insertAdjacentElement('afterend', warning);
+  }
+
+  return wrapper.innerHTML;
 }
 
 function handleDishClick(elem) {
@@ -709,21 +760,17 @@ function buildGeneratedRecipeHtml(recipeJson) {
   const steps = normalizedRecipe.steps;
 
   const ingredientRows = ingredients
-    .map(item => {
-      const safeItem = normalizeIngredientItem(item);
-      const qty = safeItem.qty == null ? '' : String(safeItem.qty);
-      const unit = safeItem.unit ? String(safeItem.unit) : '';
-      const notes = safeItem.notes ? ` (${String(safeItem.notes)})` : '';
-      const ingredientName = `${safeItem.name}${notes}`.trim();
-      return `<tr><td>${escapeHtml(ingredientName)}</td><td>${escapeHtml(`${qty} ${unit}`.trim())}</td></tr>`;
-    })
+    .map(item => ingredientToDisplay(normalizeIngredientItem(item)))
+    .filter(display => display.name)
+    .map(display => `<tr><td>${escapeHtml(display.name)}</td><td>${escapeHtml(display.amount)}</td></tr>`)
     .join('');
+  const noIngredientsWarning = ingredientRows ? '' : '<p class="no-ingredients-warning">No ingredients found for this recipe.</p>';
 
   const stepRows = steps
     .map(step => `<li><p>${escapeHtml(String(step))}</p></li>`)
     .join('');
 
-  return `<h2>${title}</h2><h3>Ingredients</h3><table><thead><tr><th>Ingredient</th><th>Amount</th></tr></thead><tbody>${ingredientRows}</tbody></table><h3>Method</h3><ol type="1">${stepRows}</ol>`;
+  return `<h2>${title}</h2><h3>Ingredients</h3><table><thead><tr><th>Ingredient</th><th>Amount</th></tr></thead><tbody>${ingredientRows}</tbody></table>${noIngredientsWarning}<h3>Method</h3><ol type="1">${stepRows}</ol>`;
 }
 
 function isValidExtractedRecipe(recipeJson) {
@@ -809,15 +856,15 @@ function renderExtractPreview(recipeJson) {
   titleEl.innerHTML = `<h4>${escapeHtml(normalizedRecipe.title || 'Untitled')}</h4>`;
 
   const ingredients = normalizedRecipe.ingredients;
-  ingredientsEl.innerHTML = `<h4>Ingredients</h4><ul>${ingredients
-    .map(item => {
-      const safeItem = normalizeIngredientItem(item);
-      const qty = safeItem.qty == null ? '' : `${safeItem.qty}`;
-      const unit = safeItem.unit || '';
-      const notes = safeItem.notes ? ` (${safeItem.notes})` : '';
-      return `<li>${escapeHtml(`${qty} ${unit}`.trim())} ${escapeHtml(safeItem.name || '')}${escapeHtml(notes)}</li>`;
+  const ingredientItems = ingredients
+    .map(item => ingredientToDisplay(normalizeIngredientItem(item)))
+    .filter(display => display.name)
+    .map(display => {
+      const amount = display.amount ? `${escapeHtml(display.amount)} ` : '';
+      return `<li>${amount}${escapeHtml(display.name)}</li>`;
     })
-    .join('')}</ul>`;
+    .join('');
+  ingredientsEl.innerHTML = `<h4>Ingredients</h4>${ingredientItems ? `<ul>${ingredientItems}</ul>` : '<p class="no-ingredients-warning">No ingredients found for this recipe.</p>'}`;
 
   const steps = normalizedRecipe.steps;
   stepsEl.innerHTML = `<h4>Steps</h4><ol>${steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}</ol>`;
