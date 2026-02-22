@@ -15,9 +15,7 @@
   <script src="dinner_menu_data.js"></script>
   <script>
     (function loadRecipeScriptsWithVersion() {
-      var version = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-        ? String(Date.now())
-        : '20260222';
+      var version = String(Date.now());
       document.write('<script src="recipeslunch.js?v=' + version + '"><\\/script>');
       document.write('<script src="recipes.js?v=' + version + '"><\\/script>');
     })();

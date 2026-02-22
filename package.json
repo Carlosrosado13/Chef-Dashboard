@@ -3,7 +3,8 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "extract:ingredients": "node scripts/extract_all_ingredients_to_excel.js"
+    "extract:ingredients": "node scripts/extract_all_ingredients_to_excel.js",
+    "validate:recipes": "node scripts/validateRecipesData.js"
   },
   "devDependencies": {
     "exceljs": "^4.4.0"

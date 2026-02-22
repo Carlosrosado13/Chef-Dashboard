@@ -69,6 +69,16 @@ body {
   padding: var(--space-5);
 }
 
+.data-load-banner {
+  margin-bottom: var(--space-4);
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #f1b9bf;
+  background: #fff1f3;
+  color: #8e1f2e;
+  font-weight: 600;
+}
+
 .controls-row {
   display: grid;
   gap: var(--space-4);

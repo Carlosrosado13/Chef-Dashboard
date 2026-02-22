@@ -20,6 +20,14 @@ const lunchCategoryConfig = [
   { key: 'DESSERT', label: 'Dessert' }
 ];
 
+const bootErrors = [];
+
+function reportBootError(message) {
+  const text = String(message || 'Unknown startup error');
+  if (!bootErrors.includes(text)) bootErrors.push(text);
+  console.error(text);
+}
+
 function resolveGlobalValue(...names) {
   for (let i = 0; i < names.length; i += 1) {
     const name = names[i];
@@ -41,15 +49,45 @@ function resolveGlobalValue(...names) {
   return undefined;
 }
 
+function hasWeekLikeRecipeData(data) {
+  if (!data || typeof data !== 'object') return false;
+  const keys = Object.keys(data);
+  if (!keys.length) return false;
+
+  const weekKeys = keys.filter(key => Number.isFinite(Number(String(key).replace(/[^\d]/g, ''))));
+  if (!weekKeys.length) return false;
+
+  const sampleWeek = data[weekKeys[0]];
+  if (!sampleWeek || typeof sampleWeek !== 'object') return false;
+
+  return Object.values(sampleWeek).some(value => typeof value === 'string');
+}
+
+function validateRecipeData(label, data) {
+  if (!hasWeekLikeRecipeData(data)) {
+    reportBootError(`Recipe data failed to load. Check recipes.js/recipeslunch.js (${label}).`);
+    return null;
+  }
+  return data;
+}
+
+function validateMenuData(label, data) {
+  if (!data || typeof data !== 'object' || !Object.keys(data).length) {
+    reportBootError(`Menu data failed to load (${label}).`);
+    return {};
+  }
+  return data;
+}
+
 const ingredientDataStore = resolveGlobalValue('menuData') || { menu: [] };
-const dinnerMenuDataStore = resolveGlobalValue('dinnerMenuData', 'menuOverviewData') || {};
-const lunchMenuDataStore = resolveGlobalValue('lunchMenuData') || {};
+const dinnerMenuDataStore = validateMenuData('Dinner Menu', resolveGlobalValue('dinnerMenuData', 'menuOverviewData') || {});
+const lunchMenuDataStore = validateMenuData('Lunch Menu', resolveGlobalValue('lunchMenuData') || {});
 const mealData = {
   dinner: dinnerMenuDataStore,
   lunch: lunchMenuDataStore
 };
-const recipesStore = resolveGlobalValue('recipesData') || null;
-const lunchRecipesStore = resolveGlobalValue('recipesLunchData') || {};
+const recipesStore = validateRecipeData('Dinner Recipes', resolveGlobalValue('recipesData'));
+const lunchRecipesStore = validateRecipeData('Lunch Recipes', resolveGlobalValue('recipesLunchData')) || {};
 
 let selectedDish = null;
 let selectedMeal = 'dinner';
@@ -128,7 +166,7 @@ function parseQuantityAndUnit(value) {
 
 function parseIngredientsFromRecipeHtml(recipeHtml) {
   const rows = [];
-  if (!recipeHtml) return rows;
+  if (!recipeHtml || typeof recipeHtml !== 'string') return rows;
   const trMatches = recipeHtml.match(/<tr[\s\S]*?<\/tr>/gi) || [];
   trMatches.forEach(row => {
     const tdMatches = row.match(/<td[\s\S]*?<\/td>/gi) || [];
@@ -158,6 +196,7 @@ function buildCategoryLookup() {
 }
 
 function findRecipeKey(weekRecipes, dishName) {
+  if (!weekRecipes || typeof weekRecipes !== 'object') return null;
   const target = normalizeName(dishName);
   let bestKey = null;
   let bestScore = 0;
@@ -276,6 +315,10 @@ function renderRecipe() {
   }
 
   const store = selectedMeal === 'dinner' ? recipesStore : lunchRecipesStore;
+  if (!store || typeof store !== 'object') {
+    recipeDetails.innerHTML = '<p>Recipe data failed to load. Check recipes.js/recipeslunch.js.</p>';
+    return;
+  }
   const weekRecipes = store && store[week];
   if (!weekRecipes) {
     recipeDetails.innerHTML = '<p>Recipe data not available for this week.</p>';
@@ -577,6 +620,16 @@ function buildGeneratedRecipeHtml(recipeJson) {
   return `<h2>${title}</h2><h3>Ingredients</h3><table><thead><tr><th>Ingredient</th><th>Amount</th></tr></thead><tbody>${ingredientRows}</tbody></table><h3>Method</h3><ol type="1">${stepRows}</ol>`;
 }
 
+function isValidExtractedRecipe(recipeJson) {
+  return Boolean(
+    recipeJson &&
+    typeof recipeJson === 'object' &&
+    typeof recipeJson.title === 'string' &&
+    Array.isArray(recipeJson.ingredients) &&
+    Array.isArray(recipeJson.steps)
+  );
+}
+
 function getSelectedUpdateContext() {
   const menu = document.getElementById('updateMenuSelect').value;
   const week = document.getElementById('updateWeekSelect').value;
@@ -593,6 +646,9 @@ function buildRecipePatchPayload() {
   }
   if (!extractedRecipeDraft) {
     throw new Error('Run Extract & Preview first.');
+  }
+  if (!isValidExtractedRecipe(extractedRecipeDraft)) {
+    throw new Error('Extracted recipe is malformed. Need title, ingredients[], and steps[].');
   }
 
   return {
@@ -723,6 +779,9 @@ async function handleExtractPreview() {
       throw new Error(`Extract failed (${response.status}): ${errorText}`);
     }
     const recipeJson = await response.json();
+    if (!isValidExtractedRecipe(recipeJson)) {
+      throw new Error('Backend returned malformed recipe JSON (title/ingredients/steps required).');
+    }
     extractedRecipeDraft = recipeJson;
     renderExtractPreview(recipeJson);
     setUpdateStatus('Recipe extracted. Review preview, then Apply Update.', false);
@@ -734,7 +793,7 @@ async function handleExtractPreview() {
 async function handleApplyUpdate() {
   try {
     buildRecipePatchPayload();
-    setUpdateStatus('Apply is local: click "Download Patch JSON", then run node er/applyRecipePatch.js <patch.json>.', false);
+    setUpdateStatus('Apply is local: click "Download Patch JSON", run node er/applyRecipePatch.js <patch.json>, then git push. Hard refresh (Ctrl+F5) if changes do not appear immediately.', false);
   } catch (error) {
     setUpdateStatus(error.message || String(error), true);
   }
@@ -928,6 +987,22 @@ function requireElement(id) {
   return element;
 }
 
+function renderBootErrorsBanner() {
+  if (!bootErrors.length) return;
+  const shell = document.querySelector('.dashboard-shell');
+  if (!shell) return;
+
+  let banner = document.getElementById('dataLoadBanner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'dataLoadBanner';
+    banner.className = 'data-load-banner';
+    shell.prepend(banner);
+  }
+
+  banner.textContent = `Recipe data failed to load. Check recipes.js/recipeslunch.js. ${bootErrors.join(' | ')}`;
+}
+
 function validateRequiredSelectors() {
   [
     'weekSelect',
@@ -973,6 +1048,7 @@ function validateRequiredSelectors() {
 
 function init() {
   validateRequiredSelectors();
+  renderBootErrorsBanner();
 
   if (!mealData.dinner || !Object.keys(mealData.dinner).length) {
     console.warn('Dinner menu data failed to load; week/day dropdowns cannot be populated.');
@@ -981,6 +1057,10 @@ function init() {
 
   if (!mealData.lunch || !Object.keys(mealData.lunch).length) {
     console.warn('Lunch menu data failed to load; lunch view may not render menu cards.');
+  }
+
+  if (!recipesStore || !lunchRecipesStore) {
+    console.warn('Recipe data is missing or invalid; recipe rendering will be limited.');
   }
 
   populateWeeks(selectedMeal);
