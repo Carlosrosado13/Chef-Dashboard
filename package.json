@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "scripts": {
     "extract:ingredients": "node scripts/extract_all_ingredients_to_excel.js",
-    "validate:recipes": "node scripts/validateRecipesData.js"
+    "validate:recipes": "node scripts/validateRecipesData.js",
+    "apply:recipe-patch": "node scripts/applyRecipePatch.js"
   },
   "devDependencies": {
     "exceljs": "^4.4.0"

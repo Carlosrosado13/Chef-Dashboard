@@ -684,7 +684,7 @@ function downloadPatchJson() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(href);
-    setUpdateStatus('Patch JSON downloaded. Run node er/applyRecipePatch.js <patch.json>.', false);
+    setUpdateStatus('Patch JSON downloaded. Run node scripts/applyRecipePatch.js <patch.json>.', false);
   } catch (error) {
     setUpdateStatus(error.message || String(error), true);
   }
@@ -793,7 +793,7 @@ async function handleExtractPreview() {
 async function handleApplyUpdate() {
   try {
     buildRecipePatchPayload();
-    setUpdateStatus('Apply is local: click "Download Patch JSON", run node er/applyRecipePatch.js <patch.json>, then git push. Hard refresh (Ctrl+F5) if changes do not appear immediately.', false);
+    setUpdateStatus('Apply is local: click "Download Patch JSON", run node scripts/applyRecipePatch.js <patch.json>, then git push. Hard refresh (Ctrl+F5) if changes do not appear immediately.', false);
   } catch (error) {
     setUpdateStatus(error.message || String(error), true);
   }
