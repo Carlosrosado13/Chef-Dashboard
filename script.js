@@ -86,8 +86,18 @@ const mealData = {
   dinner: dinnerMenuDataStore,
   lunch: lunchMenuDataStore
 };
-const recipesStore = validateRecipeData('Dinner Recipes', resolveGlobalValue('recipesData'));
-const lunchRecipesStore = validateRecipeData('Lunch Recipes', resolveGlobalValue('recipesLunchData')) || {};
+console.log('recipesData global:', window.recipesData);
+console.log('recipesLunchData global:', window.recipesLunchData);
+const dinnerRecipesGlobal = window.recipesData ?? null;
+const lunchRecipesGlobal = window.recipesLunchData ?? null;
+if (!dinnerRecipesGlobal) {
+  console.error('Dinner recipes missing');
+}
+if (!lunchRecipesGlobal) {
+  console.error('Lunch recipes missing');
+}
+const recipesStore = validateRecipeData('Dinner Recipes', dinnerRecipesGlobal);
+const lunchRecipesStore = validateRecipeData('Lunch Recipes', lunchRecipesGlobal) || {};
 
 let selectedDish = null;
 let selectedMeal = 'dinner';
