@@ -191,7 +191,7 @@ function normalizeExtractedRecipe(recipeJson) {
   return {
     ...source,
     title: source.title == null ? '' : String(source.title),
-    servings: source.servings == null ? '' : String(source.servings),
+    servings: source.servings == null ? (source.yield == null ? '' : String(source.yield)) : String(source.servings),
     ingredients: ingredientsRaw
       .map(normalizeIngredientItem)
       .filter((item) => item && asIngredientLine(item.name)),
@@ -787,6 +787,7 @@ function updateDishId(menu, week, day, slot) {
 function buildGeneratedRecipeHtml(recipeJson) {
   const normalizedRecipe = normalizeExtractedRecipe(recipeJson);
   const title = escapeHtml(normalizedRecipe.title || 'Untitled Recipe');
+  const yieldLine = normalizedRecipe.servings ? `<p><strong>Yield:</strong> ${escapeHtml(normalizedRecipe.servings)}</p>` : '';
   const ingredients = normalizedRecipe.ingredients;
   const steps = normalizedRecipe.steps;
 
@@ -801,7 +802,7 @@ function buildGeneratedRecipeHtml(recipeJson) {
     .map(step => `<li><p>${escapeHtml(String(step))}</p></li>`)
     .join('');
 
-  return `<h2>${title}</h2><h3>Ingredients</h3><table><thead><tr><th>Ingredient</th><th>Amount</th></tr></thead><tbody>${ingredientRows}</tbody></table>${noIngredientsWarning}<h3>Method</h3><ol type="1">${stepRows}</ol>`;
+  return `<h2>${title}</h2>${yieldLine}<h3>Ingredients</h3><table><thead><tr><th>Ingredient</th><th>Amount</th></tr></thead><tbody>${ingredientRows}</tbody></table>${noIngredientsWarning}<h3>Method</h3><ol type="1">${stepRows}</ol>`;
 }
 
 function isValidExtractedRecipe(recipeJson) {
@@ -850,6 +851,7 @@ function buildRecipePatchPayload() {
     recipeData: {
       title: normalizedDraft.title || '',
       servings: normalizedDraft.servings || '',
+      yield: normalizedDraft.servings || '',
       ingredients: normalizedDraft.ingredients || [],
       steps: normalizedDraft.steps || [],
       sourceUrl: normalizedDraft.sourceUrl || document.getElementById('recipeUrlInput').value.trim(),

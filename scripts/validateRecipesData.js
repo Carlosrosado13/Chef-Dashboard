@@ -81,15 +81,15 @@ function validateRecipeObject(label, data) {
     const recipeKeys = Object.keys(weekData);
     assert(recipeKeys.length > 0, `${label} week ${weekKey} must have recipe entries`);
 
-    const hasRenderable = recipeKeys.some((key) => {
-      const value = weekData[key];
-      return typeof value === 'string' || (value && typeof value === 'object');
-    });
-    assert(hasRenderable, `${label} week ${weekKey} must contain renderable recipes`);
+    const hasRenderable = recipeKeys.some((key) => typeof weekData[key] === 'string');
+    assert(hasRenderable, `${label} week ${weekKey} must contain string recipe HTML entries`);
 
     recipeKeys.forEach((recipeKey) => {
       const value = weekData[recipeKey];
-      if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+      if (typeof value === 'string') return;
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        throw new Error(`${label} week ${weekKey} recipe "${recipeKey}" must be a string`);
+      }
 
       const steps = Array.isArray(value.steps) ? value.steps.map((step) => String(step || '').trim()).filter(Boolean) : [];
       if (!steps.length) return;
