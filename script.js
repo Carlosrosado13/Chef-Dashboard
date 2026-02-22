@@ -53,6 +53,8 @@ const lunchRecipesStore = resolveGlobalValue('recipesLunchData') || {};
 
 let selectedDish = null;
 let selectedMeal = 'dinner';
+let extractedRecipeDraft = null;
+let generatedRecipeHtmlDraft = '';
 
 const ingredientCategories = ['produce', 'protein', 'dairy', 'dry', 'other'];
 const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -533,6 +535,209 @@ function renderWeeklyView(weekId) {
   renderWeek(selectedMeal, week);
 }
 
+function getRecipeStoreByMenu(menu) {
+  return menu === 'lunch' ? lunchRecipesStore : recipesStore;
+}
+
+function getApiBaseUrl() {
+  const input = document.getElementById('adminApiBase');
+  return input ? input.value.trim().replace(/\/+$/, '') : '';
+}
+
+function setUpdateStatus(message, isError) {
+  const status = document.getElementById('updateStatus');
+  if (!status) return;
+  status.textContent = message || '';
+  status.style.color = isError ? '#b42318' : 'var(--brand-teal-dark)';
+}
+
+function updateDishId(menu, week, day, slot) {
+  return `${menu}:week${week}:${day}:${slot}`;
+}
+
+function buildGeneratedRecipeHtml(recipeJson) {
+  const title = escapeHtml(recipeJson.title || 'Untitled Recipe');
+  const ingredients = Array.isArray(recipeJson.ingredients) ? recipeJson.ingredients : [];
+  const steps = Array.isArray(recipeJson.steps) ? recipeJson.steps : [];
+
+  const ingredientRows = ingredients
+    .map(item => {
+      const qty = item.qty == null ? '' : String(item.qty);
+      const unit = item.unit ? String(item.unit) : '';
+      const notes = item.notes ? ` (${String(item.notes)})` : '';
+      const ingredientName = `${String(item.name || '')}${notes}`.trim();
+      return `<tr><td>${escapeHtml(ingredientName)}</td><td>${escapeHtml(`${qty} ${unit}`.trim())}</td></tr>`;
+    })
+    .join('');
+
+  const stepRows = steps
+    .map(step => `<li><p>${escapeHtml(String(step))}</p></li>`)
+    .join('');
+
+  return `<h2>${title}</h2><h3>Ingredients</h3><table><thead><tr><th>Ingredient</th><th>Amount</th></tr></thead><tbody>${ingredientRows}</tbody></table><h3>Method</h3><ol type="1">${stepRows}</ol>`;
+}
+
+function renderExtractPreview(recipeJson) {
+  const titleEl = document.getElementById('previewTitle');
+  const ingredientsEl = document.getElementById('previewIngredients');
+  const stepsEl = document.getElementById('previewSteps');
+  const generatedEl = document.getElementById('previewGenerated');
+  if (!titleEl || !ingredientsEl || !stepsEl || !generatedEl) return;
+
+  titleEl.innerHTML = `<h4>${escapeHtml(recipeJson.title || 'Untitled')}</h4>`;
+
+  const ingredients = Array.isArray(recipeJson.ingredients) ? recipeJson.ingredients : [];
+  ingredientsEl.innerHTML = `<h4>Ingredients</h4><ul>${ingredients
+    .map(item => {
+      const qty = item.qty == null ? '' : `${item.qty}`;
+      const unit = item.unit || '';
+      const notes = item.notes ? ` (${item.notes})` : '';
+      return `<li>${escapeHtml(`${qty} ${unit}`.trim())} ${escapeHtml(item.name || '')}${escapeHtml(notes)}</li>`;
+    })
+    .join('')}</ul>`;
+
+  const steps = Array.isArray(recipeJson.steps) ? recipeJson.steps : [];
+  stepsEl.innerHTML = `<h4>Steps</h4><ol>${steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}</ol>`;
+
+  generatedRecipeHtmlDraft = buildGeneratedRecipeHtml(recipeJson);
+  generatedEl.textContent = generatedRecipeHtmlDraft;
+}
+
+function refreshUpdateDishOptions() {
+  const menu = document.getElementById('updateMenuSelect').value;
+  const week = document.getElementById('updateWeekSelect').value;
+  const day = document.getElementById('updateDaySelect').value;
+  const dishSelect = document.getElementById('updateDishSelect');
+  if (!dishSelect) return;
+
+  const dayMenu = getMealMenu(menu, week, day);
+  const recipeStore = getRecipeStoreByMenu(menu) || {};
+  const weekRecipes = recipeStore[week] || recipeStore[String(week)] || {};
+  const categories = getCategoryConfig(menu);
+
+  dishSelect.innerHTML = '';
+
+  categories.forEach(category => {
+    const slot = category.key;
+    const dishName = dayMenu[slot];
+    if (!dishName) return;
+
+    const recipeKey = findRecipeKey(weekRecipes, dishName);
+    const dishId = updateDishId(menu, week, day, slot);
+    const option = document.createElement('option');
+    option.value = dishId;
+    option.dataset.recipeKey = recipeKey || '';
+    option.dataset.slot = slot;
+    option.dataset.dishName = dishName;
+    option.textContent = `${slot}: ${dishName}`;
+    dishSelect.appendChild(option);
+  });
+
+  if (!dishSelect.options.length) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'No dishes found for selected day';
+    dishSelect.appendChild(option);
+  }
+}
+
+async function handleExtractPreview() {
+  const apiBase = getApiBaseUrl();
+  const url = document.getElementById('recipeUrlInput').value.trim();
+
+  if (!apiBase) {
+    setUpdateStatus('Backend API Base URL is required.', true);
+    return;
+  }
+  if (!url) {
+    setUpdateStatus('Recipe URL is required.', true);
+    return;
+  }
+
+  setUpdateStatus('Extracting recipe...', false);
+  try {
+    const response = await fetch(`${apiBase}/extract`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Extract failed (${response.status}): ${errorText}`);
+    }
+    const recipeJson = await response.json();
+    extractedRecipeDraft = recipeJson;
+    renderExtractPreview(recipeJson);
+    setUpdateStatus('Recipe extracted. Review preview, then Apply Update.', false);
+  } catch (error) {
+    setUpdateStatus(error.message || String(error), true);
+  }
+}
+
+async function handleApplyUpdate() {
+  const apiBase = getApiBaseUrl();
+  const adminSecret = document.getElementById('adminSecretInput').value.trim();
+  const menu = document.getElementById('updateMenuSelect').value;
+  const week = document.getElementById('updateWeekSelect').value;
+  const day = document.getElementById('updateDaySelect').value;
+  const dishSelect = document.getElementById('updateDishSelect');
+  const selected = dishSelect.options[dishSelect.selectedIndex];
+
+  if (!apiBase) {
+    setUpdateStatus('Backend API Base URL is required.', true);
+    return;
+  }
+  if (!adminSecret) {
+    setUpdateStatus('Admin secret is required for Apply Update.', true);
+    return;
+  }
+  if (!extractedRecipeDraft) {
+    setUpdateStatus('Run Extract & Preview first.', true);
+    return;
+  }
+  if (!selected || !selected.value) {
+    setUpdateStatus('Select a dish slot to update.', true);
+    return;
+  }
+  if (!selected.dataset.recipeKey) {
+    setUpdateStatus('Could not map selected dish to an existing recipe key.', true);
+    return;
+  }
+
+  const payload = {
+    menu,
+    week: Number(week),
+    day,
+    dishId: selected.value,
+    dishSlot: selected.dataset.slot,
+    dishName: selected.dataset.dishName,
+    recipeKey: selected.dataset.recipeKey,
+    recipeJson: extractedRecipeDraft,
+    generatedRecipeHtml: generatedRecipeHtmlDraft
+  };
+
+  setUpdateStatus('Applying update to repository...', false);
+  try {
+    const response = await fetch(`${apiBase}/apply`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-secret': adminSecret
+      },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Apply failed (${response.status}): ${errorText}`);
+    }
+    const result = await response.json();
+    const commitRef = result.commitUrl || result.commitSha || 'success';
+    setUpdateStatus(`Update applied: ${commitRef}`, false);
+  } catch (error) {
+    setUpdateStatus(error.message || String(error), true);
+  }
+}
+
 function getSelectedExportWeek() {
   const exportWeekSelect = document.getElementById('exportWeekSelect');
   return exportWeekSelect && exportWeekSelect.value ? String(exportWeekSelect.value) : '1';
@@ -582,8 +787,10 @@ function switchTab(tab) {
   const recipeTab = document.getElementById('recipeTab');
   const ingredientTab = document.getElementById('ingredientTab');
   const weeklyTab = document.getElementById('weeklyTab');
+  const updateTab = document.getElementById('updateTab');
   const recipesView = document.getElementById('recipesView');
   const weeklyView = document.getElementById('weeklyView');
+  const updateView = document.getElementById('updateView');
   const mobileMode = tab === 'ingredients' ? 'ingredients' : 'recipes';
 
   recipesView.dataset.mobileView = mobileMode;
@@ -592,24 +799,40 @@ function switchTab(tab) {
     recipeTab.classList.add('active');
     ingredientTab.classList.remove('active');
     weeklyTab.classList.remove('active');
+    updateTab.classList.remove('active');
     recipesView.classList.add('active');
     weeklyView.classList.remove('active');
+    updateView.classList.remove('active');
     setDaySelectorVisibility(true);
   } else if (tab === 'ingredients') {
     recipeTab.classList.remove('active');
     ingredientTab.classList.add('active');
     weeklyTab.classList.remove('active');
+    updateTab.classList.remove('active');
     recipesView.classList.add('active');
     weeklyView.classList.remove('active');
+    updateView.classList.remove('active');
     setDaySelectorVisibility(true);
-  } else {
+  } else if (tab === 'weekly') {
     recipeTab.classList.remove('active');
     ingredientTab.classList.remove('active');
     weeklyTab.classList.add('active');
+    updateTab.classList.remove('active');
     recipesView.classList.remove('active');
     weeklyView.classList.add('active');
+    updateView.classList.remove('active');
     setDaySelectorVisibility(false);
     renderWeeklyView(document.getElementById('weekSelect').value);
+  } else {
+    recipeTab.classList.remove('active');
+    ingredientTab.classList.remove('active');
+    weeklyTab.classList.remove('active');
+    updateTab.classList.add('active');
+    recipesView.classList.remove('active');
+    weeklyView.classList.remove('active');
+    updateView.classList.add('active');
+    setDaySelectorVisibility(false);
+    refreshUpdateDishOptions();
   }
 }
 
@@ -641,6 +864,7 @@ function attachEvents() {
   const recipeTab = document.getElementById('recipeTab');
   const ingredientTab = document.getElementById('ingredientTab');
   const weeklyTab = document.getElementById('weeklyTab');
+  const updateTab = document.getElementById('updateTab');
   const dinnerMealTab = document.getElementById('dinnerMealTab');
   const lunchMealTab = document.getElementById('lunchMealTab');
   const exportWeekSelect = document.getElementById('exportWeekSelect');
@@ -650,6 +874,11 @@ function attachEvents() {
   const downloadDinnerGroceryBtn = document.getElementById('downloadDinnerGroceryBtn');
   const downloadCombinedGroceryBtn = document.getElementById('downloadCombinedGroceryBtn');
   const downloadCombinedInventoryMissingBtn = document.getElementById('downloadCombinedInventoryMissingBtn');
+  const updateMenuSelect = document.getElementById('updateMenuSelect');
+  const updateWeekSelect = document.getElementById('updateWeekSelect');
+  const updateDaySelect = document.getElementById('updateDaySelect');
+  const extractPreviewBtn = document.getElementById('extractPreviewBtn');
+  const applyUpdateBtn = document.getElementById('applyUpdateBtn');
 
   weekSelect.addEventListener('change', () => {
     syncExportWeekWithMainWeek();
@@ -671,6 +900,7 @@ function attachEvents() {
   recipeTab.addEventListener('click', () => switchTab('recipes'));
   ingredientTab.addEventListener('click', () => switchTab('ingredients'));
   weeklyTab.addEventListener('click', () => switchTab('weekly'));
+  updateTab.addEventListener('click', () => switchTab('update'));
   dinnerMealTab.addEventListener('click', () => setMeal('dinner'));
   lunchMealTab.addEventListener('click', () => setMeal('lunch'));
   downloadLunchIngredientsBtn.addEventListener('click', () => downloadIngredientsExport('lunch'));
@@ -679,6 +909,11 @@ function attachEvents() {
   downloadDinnerGroceryBtn.addEventListener('click', () => downloadGroceryExport('dinner'));
   downloadCombinedGroceryBtn.addEventListener('click', () => downloadGroceryExport('combined'));
   downloadCombinedInventoryMissingBtn.addEventListener('click', downloadCombinedMissingInventoryReport);
+  updateMenuSelect.addEventListener('change', refreshUpdateDishOptions);
+  updateWeekSelect.addEventListener('change', refreshUpdateDishOptions);
+  updateDaySelect.addEventListener('change', refreshUpdateDishOptions);
+  extractPreviewBtn.addEventListener('click', handleExtractPreview);
+  applyUpdateBtn.addEventListener('click', handleApplyUpdate);
 }
 
 function requireElement(id) {
@@ -701,6 +936,7 @@ function validateRequiredSelectors() {
     'recipeTab',
     'ingredientTab',
     'weeklyTab',
+    'updateTab',
     'dinnerMealTab',
     'lunchMealTab',
     'exportWeekSelect',
@@ -710,6 +946,21 @@ function validateRequiredSelectors() {
     'downloadDinnerGroceryBtn',
     'downloadCombinedGroceryBtn',
     'downloadCombinedInventoryMissingBtn',
+    'updateView',
+    'adminApiBase',
+    'adminSecretInput',
+    'updateMenuSelect',
+    'updateWeekSelect',
+    'updateDaySelect',
+    'updateDishSelect',
+    'recipeUrlInput',
+    'extractPreviewBtn',
+    'applyUpdateBtn',
+    'updateStatus',
+    'previewTitle',
+    'previewIngredients',
+    'previewSteps',
+    'previewGenerated',
     'recipesView',
     'weeklyView',
     'weeklyMenuGrid'
@@ -737,6 +988,10 @@ function init() {
   } catch (error) {
     console.warn('Failed to build ingredient checker data:', error);
   }
+
+  document.getElementById('updateWeekSelect').value = document.getElementById('weekSelect').value || '1';
+  document.getElementById('updateMenuSelect').value = 'dinner';
+  refreshUpdateDishOptions();
 
   setMeal('dinner');
   renderWeeklyView(document.getElementById('weekSelect').value);

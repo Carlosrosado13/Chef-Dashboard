@@ -39,6 +39,7 @@
         <button id="recipeTab" class="tab-button active">Recipe Search</button>
         <button id="ingredientTab" class="tab-button">Ingredients Checker</button>
         <button id="weeklyTab" class="tab-button">Weekly View</button>
+        <button id="updateTab" class="tab-button">Update Recipes</button>
       </nav>
 
       <section class="controls" aria-label="Filter controls">
@@ -90,6 +91,66 @@
 
     <section id="weeklyView" class="tab-content" aria-hidden="true">
       <div id="weeklyMenuGrid" class="weekly-menu-grid"></div>
+    </section>
+
+    <section id="updateView" class="tab-content" aria-hidden="true">
+      <section class="update-panel" aria-label="Update recipes admin">
+        <h2>Update Recipes</h2>
+        <div class="update-grid">
+          <label for="adminApiBase">Backend API Base URL</label>
+          <input type="url" id="adminApiBase" placeholder="https://your-worker.example.workers.dev" />
+
+          <label for="adminSecretInput">Admin Secret</label>
+          <input type="password" id="adminSecretInput" placeholder="Required for Apply Update" />
+
+          <label for="updateMenuSelect">Menu</label>
+          <select id="updateMenuSelect">
+            <option value="dinner">Dinner</option>
+            <option value="lunch">Lunch</option>
+          </select>
+
+          <label for="updateWeekSelect">Week</label>
+          <select id="updateWeekSelect">
+            <option value="1">Week 1</option>
+            <option value="2">Week 2</option>
+            <option value="3">Week 3</option>
+            <option value="4">Week 4</option>
+          </select>
+
+          <label for="updateDaySelect">Day</label>
+          <select id="updateDaySelect">
+            <option value="Monday">Mon</option>
+            <option value="Tuesday">Tue</option>
+            <option value="Wednesday">Wed</option>
+            <option value="Thursday">Thu</option>
+            <option value="Friday">Fri</option>
+            <option value="Saturday">Sat</option>
+            <option value="Sunday">Sun</option>
+          </select>
+
+          <label for="updateDishSelect">Dish Slot</label>
+          <select id="updateDishSelect"></select>
+
+          <label for="recipeUrlInput">Recipe URL</label>
+          <input type="url" id="recipeUrlInput" placeholder="https://example.com/recipe" />
+        </div>
+
+        <div class="update-actions">
+          <button id="extractPreviewBtn" type="button" class="tab-button active">Extract & Preview</button>
+          <button id="applyUpdateBtn" type="button" class="tab-button">Apply Update</button>
+        </div>
+
+        <p id="updateStatus" class="update-status" aria-live="polite"></p>
+
+        <section class="preview-block">
+          <h3>Extracted Recipe Preview</h3>
+          <div id="previewTitle"></div>
+          <div id="previewIngredients"></div>
+          <div id="previewSteps"></div>
+          <h4>Generated Site Format (HTML)</h4>
+          <pre id="previewGenerated"></pre>
+        </section>
+      </section>
     </section>
   </main>
 

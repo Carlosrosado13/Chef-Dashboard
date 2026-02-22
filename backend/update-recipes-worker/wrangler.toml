@@ -1,0 +1,6 @@
+name = "chef-dashboard-update-recipes"
+main = "src/index.mjs"
+compatibility_date = "2026-02-22"
+
+[vars]
+GITHUB_BRANCH = "main"
