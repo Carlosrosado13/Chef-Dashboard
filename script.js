@@ -22,6 +22,73 @@ const lunchCategoryConfig = [
 
 const bootErrors = [];
 
+function safeParse(jsonText, fallback = null) {
+  if (typeof jsonText !== 'string') return fallback;
+  const trimmed = jsonText.trim();
+  if (!trimmed) return fallback;
+  try {
+    return JSON.parse(trimmed);
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+function asString(value) {
+  return typeof value === 'string' ? value : '';
+}
+
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function asObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+function safeIndexOf(value, needle) {
+  if (typeof value === 'string' || Array.isArray(value)) return value.indexOf(needle);
+  return -1;
+}
+
+function safeLength(value) {
+  if (typeof value === 'string' || Array.isArray(value)) return value.length;
+  return 0;
+}
+
+function safeObjectKeys(value) {
+  if (!value || typeof value !== 'object') return [];
+  try {
+    return Object.keys(value);
+  } catch (_error) {
+    return [];
+  }
+}
+
+function readStorageItem(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function writeStorageItem(key, value) {
+  try {
+    localStorage.setItem(key, String(value));
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function removeStorageItem(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch (_error) {
+    // Ignore storage failures in locked-down browser contexts.
+  }
+}
+
 function reportBootError(message) {
   const text = String(message || 'Unknown startup error');
   if (!bootErrors.includes(text)) bootErrors.push(text);
@@ -111,6 +178,8 @@ const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Satur
 const EXPORT_BASE_PATH = 'data/exports';
 const REPORT_BASE_PATH = 'data/reports';
 const API_BASE_STORAGE_KEY = 'chefDashboardApiBaseUrl';
+const RECIPE_OVERRIDES_STORAGE_KEY = 'chefDashboardRecipeOverridesV1';
+const LEGACY_RECIPE_OVERRIDES_STORAGE_KEY = 'chefDashboardRecipeOverrides';
 const DEFAULT_API_BASE_URL = 'https://chef-dashboard-api.carlosrosado13.workers.dev';
 const WEEKLY_DAY_KEYS = {
   Monday: ['Monday', 'Mon'],
@@ -121,6 +190,98 @@ const WEEKLY_DAY_KEYS = {
   Saturday: ['Saturday', 'Sat'],
   Sunday: ['Sunday', 'Sun']
 };
+
+function normalizeStorageApiBase(rawValue) {
+  const rawString = asString(rawValue).trim();
+  if (!rawString) return '';
+  if (safeIndexOf(rawString, '[object Object]') === 0) return '';
+  const parsed = safeParse(rawString, null);
+  if (parsed == null) return '';
+  if (typeof parsed === 'string') return parsed.trim().replace(/\/+$/, '');
+  return rawString.replace(/\/+$/, '');
+}
+
+function normalizeRecipeOverrideEntry(entry) {
+  const source = asObject(entry);
+  const menu = source.menu === 'lunch' ? 'lunch' : 'dinner';
+  const weekNumber = Number(source.week);
+  const week = Number.isFinite(weekNumber) && weekNumber > 0 ? String(weekNumber) : '';
+  const day = asString(source.day).trim();
+  const dishSlotKey = asString(source.dishSlotKey).trim();
+  const oldRecipeKey = asString(source.oldRecipeKey).trim();
+  const oldDishName = asString(source.oldDishName).trim();
+  const dishName = asString(source.dishName).trim();
+  const recipeKey = asString(source.recipeKey).trim();
+  const generatedHtml = asString(source.generatedHtml);
+  const recipeData = normalizeExtractedRecipe(source.recipeData);
+  if (!week || !day || !dishSlotKey) return null;
+
+  return {
+    menu,
+    week,
+    day,
+    dishSlotKey,
+    oldRecipeKey,
+    oldDishName,
+    dishName,
+    recipeKey,
+    generatedHtml,
+    recipeData,
+  };
+}
+
+function parseRecipeOverrides(rawValue) {
+  const parsed = safeParse(asString(rawValue), []);
+  const list = asArray(parsed);
+  return list
+    .map(normalizeRecipeOverrideEntry)
+    .filter(Boolean);
+}
+
+function loadRecipeOverridesFromStorage() {
+  const rawCurrent = readStorageItem(RECIPE_OVERRIDES_STORAGE_KEY);
+  const currentOverrides = parseRecipeOverrides(rawCurrent);
+  if (safeLength(currentOverrides) > 0) return currentOverrides;
+
+  const rawLegacy = readStorageItem(LEGACY_RECIPE_OVERRIDES_STORAGE_KEY);
+  const legacyOverrides = parseRecipeOverrides(rawLegacy);
+  if (safeLength(legacyOverrides) > 0) {
+    writeStorageItem(RECIPE_OVERRIDES_STORAGE_KEY, JSON.stringify(legacyOverrides));
+    removeStorageItem(LEGACY_RECIPE_OVERRIDES_STORAGE_KEY);
+  }
+  return legacyOverrides;
+}
+
+function cleanUpStorage() {
+  const apiRaw = readStorageItem(API_BASE_STORAGE_KEY);
+  if (apiRaw != null) {
+    const normalizedApiBase = normalizeStorageApiBase(apiRaw);
+    if (normalizedApiBase) {
+      writeStorageItem(API_BASE_STORAGE_KEY, normalizedApiBase);
+    } else {
+      removeStorageItem(API_BASE_STORAGE_KEY);
+    }
+  }
+
+  const rawCurrent = readStorageItem(RECIPE_OVERRIDES_STORAGE_KEY);
+  const currentOverrides = parseRecipeOverrides(rawCurrent);
+  if (rawCurrent != null) {
+    if (safeLength(currentOverrides) > 0) {
+      writeStorageItem(RECIPE_OVERRIDES_STORAGE_KEY, JSON.stringify(currentOverrides));
+    } else {
+      removeStorageItem(RECIPE_OVERRIDES_STORAGE_KEY);
+    }
+  }
+
+  const rawLegacy = readStorageItem(LEGACY_RECIPE_OVERRIDES_STORAGE_KEY);
+  if (rawLegacy != null) {
+    const migrated = parseRecipeOverrides(rawLegacy);
+    if (safeLength(migrated) > 0) {
+      writeStorageItem(RECIPE_OVERRIDES_STORAGE_KEY, JSON.stringify(migrated));
+    }
+    removeStorageItem(LEGACY_RECIPE_OVERRIDES_STORAGE_KEY);
+  }
+}
 
 function asIngredientLine(value) {
   if (value == null) return '';
@@ -260,13 +421,23 @@ function parseIngredientsFromRecipeHtml(recipeHtml) {
   return rows;
 }
 
+function getRecipeHtmlForIngredientParsing(recipeValue) {
+  if (typeof recipeValue === 'string') return recipeValue;
+  if (recipeValue && typeof recipeValue === 'object') {
+    if (typeof recipeValue.generatedHtml === 'string') return recipeValue.generatedHtml;
+    if (typeof recipeValue.recipeHtml === 'string') return recipeValue.recipeHtml;
+    return buildGeneratedRecipeHtml(recipeValue);
+  }
+  return '';
+}
+
 function buildCategoryLookup() {
   const lookup = {};
-  if (!ingredientDataStore || !Array.isArray(ingredientDataStore.menu)) return lookup;
-  ingredientDataStore.menu.forEach(entry => {
+  const menuEntries = asArray(ingredientDataStore && ingredientDataStore.menu);
+  menuEntries.forEach(entry => {
     if (!entry || !entry.categories) return;
     ingredientCategories.forEach(category => {
-      const items = entry.categories[category] || [];
+      const items = asArray(entry.categories[category]);
       items.forEach(item => {
         const key = normalizeName(stringifyIngredientValue(item && item.name != null ? item.name : item));
         if (key && !lookup[key]) lookup[key] = category;
@@ -307,23 +478,24 @@ function buildIngredientCheckerData() {
   const categoryLookup = buildCategoryLookup();
   const generatedMenu = [];
 
-  Object.keys(dinnerOverview).forEach(weekKey => {
+  safeObjectKeys(dinnerOverview).forEach(weekKey => {
     const weekNumber = Number(weekKey);
-    const weekDays = dinnerOverview[weekKey];
-    Object.keys(weekDays).forEach(day => {
+    const weekDays = asObject(dinnerOverview[weekKey]);
+    safeObjectKeys(weekDays).forEach(day => {
       const categories = { produce: [], protein: [], dairy: [], dry: [], other: [] };
       const seenByCategory = { produce: new Set(), protein: new Set(), dairy: new Set(), dry: new Set(), other: new Set() };
-      const dayMenu = weekDays[day];
-      const weekRecipes = recipesStore[weekKey] || {};
+      const dayMenu = asObject(weekDays[day]);
+      const weekRecipes = asObject(recipesStore[weekKey]);
 
-      Object.keys(dayMenu).forEach(menuCategory => {
-        const dishName = dayMenu[menuCategory];
+      safeObjectKeys(dayMenu).forEach(menuCategory => {
+        const dishName = asString(dayMenu[menuCategory]);
         if (!dishName || /^(n\/a|add alternative)$/i.test(dishName.trim())) return;
         const recipeKey = findRecipeKey(weekRecipes, dishName);
         if (!recipeKey) return;
 
         try {
-          parseIngredientsFromRecipeHtml(weekRecipes[recipeKey]).forEach(ingredient => {
+          const recipeValue = weekRecipes[recipeKey];
+          parseIngredientsFromRecipeHtml(getRecipeHtmlForIngredientParsing(recipeValue)).forEach(ingredient => {
             const safeIngredient = normalizeIngredientItem(ingredient);
             if (!safeIngredient.name) {
               console.warn(`Invalid ingredient found in recipe "${recipeKey}" (week ${weekKey}, ${day})`);
@@ -354,17 +526,18 @@ function buildIngredientCheckerData() {
 }
 
 function validateIngredientCheckerData() {
-  const weeks = new Set(ingredientDataStore.menu.map(entry => entry.week));
+  const menuEntries = asArray(ingredientDataStore && ingredientDataStore.menu);
+  const weeks = new Set(menuEntries.map(entry => entry && entry.week).filter((week) => week != null));
   let totalIngredients = 0;
   const emptyWeeks = [];
 
   weeks.forEach(week => {
-    const weekEntries = ingredientDataStore.menu.filter(entry => entry.week === week);
+    const weekEntries = menuEntries.filter(entry => entry && entry.week === week);
     const seen = new Set();
     let count = 0;
     weekEntries.forEach(entry => {
       ingredientCategories.forEach(category => {
-        (entry.categories[category] || []).forEach(item => {
+        asArray(entry.categories && entry.categories[category]).forEach(item => {
           const ingredientName = stringifyIngredientValue(item && item.name != null ? item.name : item);
           const key = `${entry.day}|${category}|${normalizeName(ingredientName)}`;
           if (seen.has(key)) {
@@ -529,11 +702,11 @@ function getWeekDataContainer(meal, weekKey) {
 
 function populateWeeks(meal) {
   const weekSelect = document.getElementById('weekSelect');
-  const currentWeek = weekSelect.value;
+  const currentWeek = asString(weekSelect.value);
   weekSelect.innerHTML = '';
 
   const mealWeeks = getWeekDataForMeal(meal);
-  Object.keys(mealWeeks)
+  safeObjectKeys(mealWeeks)
     .map(key => ({
       source: key,
       number: Number(String(key).replace(/[^\d]/g, ''))
@@ -556,7 +729,7 @@ function populateDays() {
   const weekSelect = document.getElementById('weekSelect');
   const daySelect = document.getElementById('daySelect');
   daySelect.innerHTML = '';
-  const week = weekSelect.value;
+  const week = asString(weekSelect.value);
   const weekData = getWeekDataContainer(selectedMeal, week);
   const days = dayOrder.filter(day => {
     const aliases = WEEKLY_DAY_KEYS[day] || [day];
@@ -580,6 +753,70 @@ function getMealMenu(meal, weekKey, dayName) {
     if (Object.prototype.hasOwnProperty.call(weekData, alias)) return weekData[alias] || {};
   }
   return {};
+}
+
+function getExistingDayAlias(weekData, dayName) {
+  const aliases = asArray(WEEKLY_DAY_KEYS[dayName]).concat([dayName]);
+  for (let i = 0; i < safeLength(aliases); i += 1) {
+    const alias = aliases[i];
+    if (Object.prototype.hasOwnProperty.call(weekData, alias)) return alias;
+  }
+  return dayName;
+}
+
+function getOrCreateDayMenuContainer(meal, weekKey, dayName) {
+  const weekData = getWeekDataContainer(meal, weekKey);
+  if (!weekData || typeof weekData !== 'object') return null;
+  const alias = getExistingDayAlias(weekData, dayName);
+  const dayMenu = asObject(weekData[alias]);
+  if (!weekData[alias] || typeof weekData[alias] !== 'object') {
+    weekData[alias] = dayMenu;
+  }
+  return dayMenu;
+}
+
+function applySingleRecipeOverride(override) {
+  const normalized = normalizeRecipeOverrideEntry(override);
+  if (!normalized) return false;
+
+  const recipeStore = getRecipeStoreByMenu(normalized.menu);
+  if (!recipeStore || typeof recipeStore !== 'object') return false;
+
+  const weekRecipes = asObject(recipeStore[normalized.week] || recipeStore[String(normalized.week)]);
+  if (!recipeStore[normalized.week] || typeof recipeStore[normalized.week] !== 'object') {
+    recipeStore[normalized.week] = weekRecipes;
+  }
+
+  const nextRecipeKey = normalized.recipeKey || normalized.recipeData.title || normalized.oldRecipeKey || normalized.oldDishName;
+  if (!nextRecipeKey) return false;
+
+  const recipePayload = {
+    ...normalized.recipeData,
+    generatedHtml: normalized.generatedHtml || buildGeneratedRecipeHtml(normalized.recipeData),
+  };
+  weekRecipes[nextRecipeKey] = recipePayload;
+
+  if (normalized.oldRecipeKey && normalized.oldRecipeKey !== nextRecipeKey) {
+    delete weekRecipes[normalized.oldRecipeKey];
+  }
+
+  const dayMenu = getOrCreateDayMenuContainer(normalized.menu, normalized.week, normalized.day);
+  if (dayMenu) {
+    dayMenu[normalized.dishSlotKey] = normalized.dishName || nextRecipeKey;
+  }
+
+  return true;
+}
+
+function applyStoredRecipeOverrides() {
+  const overrides = loadRecipeOverridesFromStorage();
+  asArray(overrides).forEach((override) => {
+    try {
+      applySingleRecipeOverride(override);
+    } catch (error) {
+      console.warn('Skipping invalid stored recipe override:', error);
+    }
+  });
 }
 
 function getCategoryConfig(meal) {
@@ -630,8 +867,8 @@ function renderDay(meal, weekKey, dayName) {
 }
 
 function renderMenuRow() {
-  const week = document.getElementById('weekSelect').value;
-  const day = document.getElementById('daySelect').value;
+  const week = asString(document.getElementById('weekSelect').value);
+  const day = asString(document.getElementById('daySelect').value);
   renderDay(selectedMeal, week, day);
 }
 
@@ -647,10 +884,10 @@ function renderIngredients() {
     return;
   }
 
-  const week = Number(document.getElementById('weekSelect').value);
-  const day = document.getElementById('daySelect').value;
-  const searchTerm = document.getElementById('searchInput').value.trim().toLowerCase();
-  const entry = ingredientDataStore.menu.find(item => item.week === week && item.day === day);
+  const week = Number(asString(document.getElementById('weekSelect').value));
+  const day = asString(document.getElementById('daySelect').value);
+  const searchTerm = asString(document.getElementById('searchInput').value).trim().toLowerCase();
+  const entry = asArray(ingredientDataStore && ingredientDataStore.menu).find(item => item && item.week === week && item.day === day);
 
   if (!entry || !entry.categories) {
     const msg = document.createElement('p');
@@ -660,11 +897,12 @@ function renderIngredients() {
   }
 
   let hasResults = false;
-  for (const groupName in entry.categories) {
-    if (!Object.prototype.hasOwnProperty.call(entry.categories, groupName)) continue;
+  const entryCategories = asObject(entry.categories);
+  for (const groupName in entryCategories) {
+    if (!Object.prototype.hasOwnProperty.call(entryCategories, groupName)) continue;
     let filtered = [];
     try {
-      filtered = (entry.categories[groupName] || []).filter(item => {
+      filtered = asArray(entryCategories[groupName]).filter(item => {
         const ingredientName = stringifyIngredientValue(item && item.name != null ? item.name : item);
         if (!ingredientName) {
           console.warn(`Invalid ingredient value found in category "${groupName}"`, item);
@@ -860,6 +1098,59 @@ function buildRecipePatchPayload() {
   };
 }
 
+function persistRecipeOverride(override) {
+  const existing = loadRecipeOverridesFromStorage();
+  const normalized = normalizeRecipeOverrideEntry(override);
+  if (!normalized) return false;
+
+  const retained = asArray(existing).filter((entry) => {
+    const parsed = normalizeRecipeOverrideEntry(entry);
+    if (!parsed) return false;
+    return !(
+      parsed.menu === normalized.menu &&
+      parsed.week === normalized.week &&
+      parsed.day === normalized.day &&
+      parsed.dishSlotKey === normalized.dishSlotKey
+    );
+  });
+
+  retained.push(normalized);
+  return writeStorageItem(RECIPE_OVERRIDES_STORAGE_KEY, JSON.stringify(retained));
+}
+
+function applyLocalRecipePatch(patch) {
+  const recipeTitle = asString(patch?.recipeData?.title).trim();
+  const normalizedDishName = recipeTitle || asString(patch.oldDishName).trim();
+  const generatedHtml = asString(patch?.recipeData?.generatedHtml) || buildGeneratedRecipeHtml(patch.recipeData);
+
+  const override = {
+    menu: patch.menu === 'lunch' ? 'lunch' : 'dinner',
+    week: patch.week,
+    day: patch.day,
+    dishSlotKey: patch.dishSlotKey,
+    oldRecipeKey: patch.oldRecipeKey,
+    oldDishName: patch.oldDishName,
+    dishName: normalizedDishName,
+    recipeKey: normalizedDishName || patch.oldRecipeKey,
+    generatedHtml,
+    recipeData: normalizeExtractedRecipe({
+      ...patch.recipeData,
+      title: normalizedDishName || patch.recipeData?.title || patch.oldDishName || '',
+      generatedHtml,
+    }),
+  };
+
+  const applied = applySingleRecipeOverride(override);
+  if (!applied) {
+    throw new Error('Failed to apply local recipe update.');
+  }
+
+  const persisted = persistRecipeOverride(override);
+  if (!persisted) {
+    console.warn('Local recipe update applied in-memory but could not be persisted to storage.');
+  }
+}
+
 function downloadPatchJson() {
   try {
     const patch = buildRecipePatchPayload();
@@ -989,16 +1280,23 @@ async function handleExtractPreview() {
 async function handleApplyUpdate() {
   try {
     const apiBase = getApiBaseUrl();
+    const patch = buildRecipePatchPayload();
+    const adminSecret = getAdminSecret();
+    if (!adminSecret) {
+      applyLocalRecipePatch(patch);
+      buildIngredientCheckerData();
+      renderMenuRow();
+      renderIngredients();
+      renderWeeklyView(document.getElementById('weekSelect').value);
+      refreshUpdateDishOptions();
+      setUpdateStatus('Update saved locally (no admin secret provided). Reload to confirm persistence.', false);
+      return;
+    }
+
     if (!apiBase) {
       throw new Error('Backend API Base URL is required.');
     }
 
-    const adminSecret = getAdminSecret();
-    if (!adminSecret) {
-      throw new Error('Admin Secret is required for Apply Update.');
-    }
-
-    const patch = buildRecipePatchPayload();
     const dryRun = isApplyDryRunEnabled();
     const applyUrl = `${apiBase}/apply${dryRun ? '?dryRun=true' : ''}`;
     const payload = {
@@ -1029,11 +1327,7 @@ async function handleApplyUpdate() {
     const contentType = res.headers.get('content-type') || '';
     const rawText = await res.text();
     let data = null;
-    try {
-      data = JSON.parse(rawText);
-    } catch (_error) {
-      data = null;
-    }
+    data = safeParse(rawText, null);
 
     console.log('Apply status:', res.status);
     console.log('Apply content-type:', contentType);
@@ -1067,8 +1361,14 @@ async function handleApplyUpdate() {
     }
     const url = data.url || data.commitUrl || '';
     const suffix = url ? ` ${url}` : '';
+    buildIngredientCheckerData();
+    renderMenuRow();
+    renderIngredients();
+    renderWeeklyView(document.getElementById('weekSelect').value);
+    refreshUpdateDishOptions();
     setUpdateStatus(`${sha}.${file}${suffix} GitHub Pages may take 1-3 minutes; hard refresh (Ctrl+F5).`, false);
   } catch (error) {
+    console.error('Update apply failed:', error);
     setUpdateStatus(error.message || String(error), true);
   }
 }
@@ -1250,13 +1550,9 @@ function attachEvents() {
   updateWeekSelect.addEventListener('change', refreshUpdateDishOptions);
   updateDaySelect.addEventListener('change', refreshUpdateDishOptions);
   adminApiBaseInput.addEventListener('input', () => {
-    const normalized = adminApiBaseInput.value.trim().replace(/\/+$/, '') || DEFAULT_API_BASE_URL;
+    const normalized = asString(adminApiBaseInput.value).trim().replace(/\/+$/, '') || DEFAULT_API_BASE_URL;
     adminApiBaseInput.value = normalized;
-    try {
-      localStorage.setItem(API_BASE_STORAGE_KEY, normalized);
-    } catch (_error) {
-      // Ignore storage write failures in locked-down browser contexts.
-    }
+    writeStorageItem(API_BASE_STORAGE_KEY, normalized);
   });
   extractPreviewBtn.addEventListener('click', handleExtractPreview);
   applyUpdateBtn.addEventListener('click', handleApplyUpdate);
@@ -1332,18 +1628,36 @@ function validateRequiredSelectors() {
   ].forEach(requireElement);
 }
 
+function registerTestHooks() {
+  try {
+    globalThis.__chefDashboardTestHooks = {
+      setExtractedRecipeDraft(recipeJson) {
+        const normalized = normalizeExtractedRecipe(recipeJson);
+        extractedRecipeDraft = normalized;
+        renderExtractPreview(normalized);
+      },
+      getStoredOverrides() {
+        return loadRecipeOverridesFromStorage();
+      },
+      clearStoredOverrides() {
+        removeStorageItem(RECIPE_OVERRIDES_STORAGE_KEY);
+      }
+    };
+  } catch (_error) {
+    // Hooks are best-effort and only used by automated tests.
+  }
+}
+
 function init() {
   validateRequiredSelectors();
+  cleanUpStorage();
+  applyStoredRecipeOverrides();
+  registerTestHooks();
   renderBootErrorsBanner();
 
   const apiBaseInput = document.getElementById('adminApiBase');
   if (apiBaseInput) {
-    let storedBase = '';
-    try {
-      storedBase = localStorage.getItem(API_BASE_STORAGE_KEY) || '';
-    } catch (_error) {
-      storedBase = '';
-    }
+    const storedBase = normalizeStorageApiBase(readStorageItem(API_BASE_STORAGE_KEY));
     const resolvedBase = (storedBase || DEFAULT_API_BASE_URL).trim().replace(/\/+$/, '');
     apiBaseInput.value = resolvedBase;
   }
