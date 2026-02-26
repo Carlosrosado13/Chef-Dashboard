@@ -1290,7 +1290,7 @@ function refreshUpdateDishOptions() {
 }
 
 async function queuePatchApply(apiBase, adminSecret, patch) {
-  const endpoint = `${apiBase}/api/applyPatch`;
+  const endpoint = `${apiBase}/api/dispatchPatch`;
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {

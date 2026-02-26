@@ -1,10 +1,11 @@
 # Update Recipes Worker (Cloudflare)
 
-This worker provides two admin endpoints for the static Chef Dashboard frontend:
+This worker provides admin endpoints for the static Chef Dashboard frontend:
 
 - `POST /extract`
 - `POST /apply`
-- `POST /api/applyPatch`
+- `POST /api/dispatchPatch`
+- `POST /api/applyPatch` (back-compat alias)
 
 ## Endpoints
 
@@ -63,7 +64,7 @@ Dry run:
 Fallback patch response:
 - If direct GitHub commit is unavailable, `/apply` returns `status: "patch_required"` with a `patch` payload for workflow dispatch.
 
-### `POST /api/applyPatch`
+### `POST /api/dispatchPatch`
 Headers:
 - `x-admin-secret: <ADMIN_SECRET>` (required if `ADMIN_SECRET` exists)
 
@@ -91,7 +92,7 @@ or direct patch object:
 Behavior:
 - Base64-encodes patch JSON.
 - Dispatches GitHub Actions workflow (`workflow_dispatch`) with input `patch_b64`.
-- Returns `{ ok: true, runUrl }` when dispatch accepted.
+- Returns `{ ok: true, status: "Dispatched workflow", runUrl }` when dispatch accepted.
 
 ## Required environment variables
 
@@ -111,7 +112,7 @@ Set these as Cloudflare worker secrets/vars:
 
 Suggested GitHub token scope:
 - Fine-grained PAT with repository `Contents: Read and write` on the target repo.
-- For workflow dispatch via `/api/applyPatch`: token also needs `Actions: Read and write`.
+- For workflow dispatch via `/api/dispatchPatch`: token also needs `Actions: Read and write`.
 
 ## Deploy
 
@@ -122,6 +123,7 @@ npm i -g wrangler
 wrangler secret put OPENAI_API_KEY
 wrangler secret put GITHUB_TOKEN
 wrangler secret put ADMIN_SECRET
+wrangler secret put GH_TOKEN
 wrangler deploy
 ```
 
@@ -129,6 +131,10 @@ Set vars in `wrangler.toml` or dashboard:
 - `GITHUB_OWNER`
 - `GITHUB_REPO`
 - `GITHUB_BRANCH`
+- `GH_OWNER`
+- `GH_REPO`
+- `GH_WORKFLOW_FILE`
+- `GH_REF`
 
 After deploy, copy worker URL and paste it into the frontend "Backend API Base URL" field in the Update Recipes tab.
 Enter `ADMIN_SECRET` in the Update tab's Admin Secret field before clicking Apply Update.

@@ -51,11 +51,15 @@ export default {
         return await handleApply(request, env);
       }
 
-      if (request.method === 'POST' && (url.pathname === '/api/applyPatch' || url.pathname === '/applyPatch')) {
-        return await handleApplyPatch(request, env);
+      if (request.method === 'POST' && (
+        url.pathname === '/api/dispatchPatch' ||
+        url.pathname === '/api/applyPatch' ||
+        url.pathname === '/applyPatch'
+      )) {
+        return await handleDispatchPatch(request, env);
       }
 
-      return json({ ok: false, error: 'Not found' }, 404);
+      return json({ ok: false, error: 'Endpoint not found', path: url.pathname }, 404);
     } catch (error) {
       return json({ ok: false, error: error.message || String(error) }, 500);
     }
@@ -236,7 +240,7 @@ async function handleApply(request, env) {
   }, 200);
 }
 
-async function handleApplyPatch(request, env) {
+async function handleDispatchPatch(request, env) {
   if (env.ADMIN_SECRET) {
     const providedSecret = request.headers.get('x-admin-secret') || '';
     if (providedSecret !== env.ADMIN_SECRET) {
@@ -296,7 +300,7 @@ async function handleApplyPatch(request, env) {
 
   return json({
     ok: true,
-    status: 'queued',
+    status: 'Dispatched workflow',
     workflowFile,
     ref,
     runId: runMeta.runId || null,
