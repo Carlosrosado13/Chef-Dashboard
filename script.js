@@ -191,6 +191,47 @@ const WEEKLY_DAY_KEYS = {
   Sunday: ['Sunday', 'Sun']
 };
 
+function normalizeToken(value) {
+  return String(value == null ? '' : value)
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+function normalizeMenuName(value) {
+  return normalizeToken(value) === 'lunch' ? 'lunch' : 'dinner';
+}
+
+function normalizeWeekValue(value) {
+  const cleaned = String(value == null ? '' : value).replace(/[^\d]/g, '');
+  if (!cleaned) return '';
+  const weekNumber = Number(cleaned);
+  return Number.isFinite(weekNumber) && weekNumber > 0 ? String(weekNumber) : '';
+}
+
+function normalizeDayName(dayValue) {
+  const target = normalizeToken(dayValue);
+  if (!target) return '';
+  for (let i = 0; i < dayOrder.length; i += 1) {
+    const day = dayOrder[i];
+    const aliases = asArray(WEEKLY_DAY_KEYS[day]).concat(day);
+    if (aliases.some((alias) => normalizeToken(alias) === target)) return day;
+  }
+  return '';
+}
+
+function findMatchingKey(sourceObject, rawKey) {
+  if (!sourceObject || typeof sourceObject !== 'object') return '';
+  const normalizedTarget = normalizeToken(rawKey);
+  if (!normalizedTarget) return '';
+  const keys = safeObjectKeys(sourceObject);
+  for (let i = 0; i < keys.length; i += 1) {
+    const key = keys[i];
+    if (normalizeToken(key) === normalizedTarget) return key;
+  }
+  return '';
+}
+
 function normalizeStorageApiBase(rawValue) {
   const rawString = asString(rawValue).trim();
   if (!rawString) return '';
@@ -203,14 +244,13 @@ function normalizeStorageApiBase(rawValue) {
 
 function normalizeRecipeOverrideEntry(entry) {
   const source = asObject(entry);
-  const menu = source.menu === 'lunch' ? 'lunch' : 'dinner';
-  const weekNumber = Number(source.week);
-  const week = Number.isFinite(weekNumber) && weekNumber > 0 ? String(weekNumber) : '';
-  const day = asString(source.day).trim();
-  const dishSlotKey = asString(source.dishSlotKey).trim();
+  const menu = normalizeMenuName(source.menu);
+  const week = normalizeWeekValue(source.week);
+  const day = normalizeDayName(source.day);
+  const dishSlotKey = asString(source.dishSlotKey || source.dishSlot || source.slot).trim().replace(/\s+/g, ' ');
   const oldRecipeKey = asString(source.oldRecipeKey).trim();
   const oldDishName = asString(source.oldDishName).trim();
-  const dishName = asString(source.dishName).trim();
+  const dishName = asString(source.dishName || source.newDishName).trim();
   const recipeKey = asString(source.recipeKey).trim();
   const generatedHtml = asString(source.generatedHtml);
   const recipeData = normalizeExtractedRecipe(source.recipeData);
@@ -782,28 +822,42 @@ function applySingleRecipeOverride(override) {
   const recipeStore = getRecipeStoreByMenu(normalized.menu);
   if (!recipeStore || typeof recipeStore !== 'object') return false;
 
+  const weekData = getWeekDataContainer(normalized.menu, normalized.week);
+  if (!weekData || typeof weekData !== 'object') return false;
+  const dayAlias = getExistingDayAlias(weekData, normalized.day);
+  const dayMenu = asObject(weekData[dayAlias]);
+  if (!weekData[dayAlias] || typeof weekData[dayAlias] !== 'object') {
+    weekData[dayAlias] = dayMenu;
+  }
+
+  const resolvedDishSlotKey = findMatchingKey(dayMenu, normalized.dishSlotKey)
+    || getCategoryConfig(normalized.menu).find((category) => normalizeToken(category.key) === normalizeToken(normalized.dishSlotKey))?.key
+    || '';
+  if (!resolvedDishSlotKey) return false;
+
   const weekRecipes = asObject(recipeStore[normalized.week] || recipeStore[String(normalized.week)]);
   if (!recipeStore[normalized.week] || typeof recipeStore[normalized.week] !== 'object') {
     recipeStore[normalized.week] = weekRecipes;
   }
 
-  const nextRecipeKey = normalized.recipeKey || normalized.recipeData.title || normalized.oldRecipeKey || normalized.oldDishName;
+  const nextRecipeKey = asString(normalized.recipeKey || normalized.recipeData.title || normalized.oldRecipeKey || normalized.oldDishName).trim();
   if (!nextRecipeKey) return false;
 
+  const normalizedRecipeData = normalizeExtractedRecipe(normalized.recipeData);
+  const generatedHtml = asString(normalized.generatedHtml).trim() || buildGeneratedRecipeHtml(normalizedRecipeData);
   const recipePayload = {
-    ...normalized.recipeData,
-    generatedHtml: normalized.generatedHtml || buildGeneratedRecipeHtml(normalized.recipeData),
+    ...normalizedRecipeData,
+    generatedHtml,
   };
   weekRecipes[nextRecipeKey] = recipePayload;
 
   if (normalized.oldRecipeKey && normalized.oldRecipeKey !== nextRecipeKey) {
-    delete weekRecipes[normalized.oldRecipeKey];
+    const oldRecipeKeyMatch = findMatchingKey(weekRecipes, normalized.oldRecipeKey) || normalized.oldRecipeKey;
+    delete weekRecipes[oldRecipeKeyMatch];
   }
 
-  const dayMenu = getOrCreateDayMenuContainer(normalized.menu, normalized.week, normalized.day);
-  if (dayMenu) {
-    dayMenu[normalized.dishSlotKey] = normalized.dishName || nextRecipeKey;
-  }
+  dayMenu[resolvedDishSlotKey] = normalized.dishName || nextRecipeKey;
+  console.log('OVERRIDE APPLIED:', normalized.week, normalized.day, nextRecipeKey);
 
   return true;
 }
@@ -1641,6 +1695,22 @@ function registerTestHooks() {
       },
       clearStoredOverrides() {
         removeStorageItem(RECIPE_OVERRIDES_STORAGE_KEY);
+      },
+      applySingleRecipeOverride(override) {
+        return applySingleRecipeOverride(override);
+      },
+      persistRecipeOverride(override) {
+        return persistRecipeOverride(override);
+      },
+      rebuildIngredientCheckerData() {
+        buildIngredientCheckerData();
+      },
+      getRecipeFromStore(menu, week, key) {
+        const store = getRecipeStoreByMenu(normalizeMenuName(menu));
+        const weekKey = normalizeWeekValue(week);
+        const weekRecipes = asObject(store && (store[weekKey] || store[String(weekKey)]));
+        const resolvedKey = findMatchingKey(weekRecipes, key) || key;
+        return weekRecipes[resolvedKey] || null;
       }
     };
   } catch (_error) {
