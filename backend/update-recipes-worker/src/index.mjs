@@ -51,6 +51,10 @@ export default {
         return await handleApply(request, env);
       }
 
+      if (request.method === 'POST' && (url.pathname === '/api/applyPatch' || url.pathname === '/applyPatch')) {
+        return await handleApplyPatch(request, env);
+      }
+
       return json({ ok: false, error: 'Not found' }, 404);
     } catch (error) {
       return json({ ok: false, error: error.message || String(error) }, 500);
@@ -146,6 +150,22 @@ async function handleApply(request, env) {
     return json({ ok: false, error: 'Empty ingredients - extraction failed' }, 422);
   }
 
+  const patch = {
+    patchVersion: 1,
+    createdAt: new Date().toISOString(),
+    menu,
+    week,
+    day: normalizeDayLabel(day),
+    dishSlotId,
+    dishSlotKey: sanitizeText(body.dishSlot || ''),
+    oldDishName: sanitizeText(body.dishName || ''),
+    oldRecipeKey: sanitizeText(body.recipeKey || ''),
+    recipeData: {
+      ...normalizedRecipe,
+      generatedHtml: generateRecipeHtml(normalizedRecipe),
+    },
+  };
+
   if (!env.GITHUB_TOKEN || !env.GITHUB_OWNER || !env.GITHUB_REPO) {
     return json({
       ok: true,
@@ -153,6 +173,7 @@ async function handleApply(request, env) {
       message: 'GitHub commit is not configured in Worker env; use local patch apply workflow.',
       command: 'node scripts/applyRecipePatch.js <patch.json>',
       dishSlotId,
+      patch,
     }, 200);
   }
 
@@ -167,10 +188,7 @@ async function handleApply(request, env) {
     week,
     day,
     dishSlotId,
-    recipe: {
-      ...normalizedRecipe,
-      generatedHtml: generateRecipeHtml(normalizedRecipe),
-    },
+    recipe: patch.recipeData,
     hints: {
       dishSlot: sanitizeText(body.dishSlot || ''),
       recipeKey: sanitizeText(body.recipeKey || ''),
@@ -215,6 +233,74 @@ async function handleApply(request, env) {
     dishSlotId,
     message: 'Recipe updated successfully',
     url: commit.commit?.html_url || null,
+  }, 200);
+}
+
+async function handleApplyPatch(request, env) {
+  if (env.ADMIN_SECRET) {
+    const providedSecret = request.headers.get('x-admin-secret') || '';
+    if (providedSecret !== env.ADMIN_SECRET) {
+      return json({ ok: false, error: 'Unauthorized' }, 401);
+    }
+  }
+
+  const body = await parseJsonBody(request);
+  const patch = normalizePatchPayload(body.patch && typeof body.patch === 'object' ? body.patch : body);
+  const patchB64 = encodeBase64(JSON.stringify(patch));
+
+  const ghToken = env.GH_TOKEN || env.GITHUB_TOKEN;
+  const ghOwner = env.GH_OWNER || env.GITHUB_OWNER;
+  const ghRepo = env.GH_REPO || env.GITHUB_REPO;
+  const workflowFile = env.GH_WORKFLOW_FILE || 'apply-recipe-patch.yml';
+  const ref = env.GH_REF || env.GITHUB_BRANCH || 'main';
+
+  if (!ghToken || !ghOwner || !ghRepo || !workflowFile || !ref) {
+    return json({
+      ok: false,
+      error: 'Missing workflow dispatch configuration.',
+      missing: {
+        GH_TOKEN: !ghToken,
+        GH_OWNER: !ghOwner,
+        GH_REPO: !ghRepo,
+        GH_WORKFLOW_FILE: !workflowFile,
+        GH_REF: !ref,
+      },
+    }, 500);
+  }
+
+  const dispatch = await githubDispatchWorkflow({
+    token: ghToken,
+    owner: ghOwner,
+    repo: ghRepo,
+    workflowFile,
+    ref,
+    patchB64,
+  });
+
+  if (!dispatch.ok) {
+    return json({
+      ok: false,
+      error: dispatch.error || 'Failed to dispatch GitHub workflow.',
+      details: dispatch.details || null,
+      status: dispatch.status || null,
+    }, 502);
+  }
+
+  const runMeta = await githubFindRecentWorkflowRun({
+    token: ghToken,
+    owner: ghOwner,
+    repo: ghRepo,
+    workflowFile,
+    ref,
+  });
+
+  return json({
+    ok: true,
+    status: 'queued',
+    workflowFile,
+    ref,
+    runId: runMeta.runId || null,
+    runUrl: runMeta.runUrl || null,
   }, 200);
 }
 
@@ -425,6 +511,65 @@ function normalizeRecipePayload(input) {
     ingredients,
     steps: normalizeRecipeInstructions(source.steps),
     sourceUrl: sanitizeText(source.sourceUrl || ''),
+  };
+}
+
+function normalizeDayLabel(day) {
+  const normalizedDay = sanitizeText(day).toLowerCase();
+  if (!normalizedDay) return '';
+  const aliases = DAY_ALIASES[normalizedDay] || [];
+  if (aliases.length > 0) return aliases[0];
+  if (normalizedDay.length === 1) return normalizedDay.toUpperCase();
+  return normalizedDay.charAt(0).toUpperCase() + normalizedDay.slice(1);
+}
+
+function normalizePatchPayload(input) {
+  const source = input && typeof input === 'object' ? input : null;
+  if (!source) {
+    throw new Error('Patch payload is required.');
+  }
+
+  const menu = sanitizeText(source.menu || '').toLowerCase();
+  const week = Number(source.week);
+  const day = normalizeDayLabel(source.day || '');
+  const dishSlotId = sanitizeText(source.dishSlotId || '');
+  const dishSlotKey = sanitizeText(source.dishSlotKey || source.dishSlot || '');
+  const recipeData = normalizeRecipePayload(source.recipeData);
+  const generatedHtml = String(source.recipeData?.generatedHtml || '').trim() || generateRecipeHtml(recipeData);
+
+  if (!['dinner', 'lunch'].includes(menu)) {
+    throw new Error('patch.menu must be dinner or lunch');
+  }
+  if (!Number.isInteger(week) || week < 1 || week > 4) {
+    throw new Error('patch.week must be an integer between 1 and 4');
+  }
+  if (!day) {
+    throw new Error('patch.day is required');
+  }
+  if (!dishSlotId) {
+    throw new Error('patch.dishSlotId is required');
+  }
+  if (!dishSlotKey) {
+    throw new Error('patch.dishSlotKey is required');
+  }
+  if (!recipeData.title || !recipeData.ingredients.length || !recipeData.steps.length) {
+    throw new Error('patch.recipeData is missing required fields');
+  }
+
+  return {
+    patchVersion: Number(source.patchVersion) || 1,
+    createdAt: sanitizeText(source.createdAt || '') || new Date().toISOString(),
+    menu,
+    week,
+    day,
+    dishSlotId,
+    dishSlotKey,
+    oldDishName: sanitizeText(source.oldDishName || ''),
+    oldRecipeKey: sanitizeText(source.oldRecipeKey || ''),
+    recipeData: {
+      ...recipeData,
+      generatedHtml,
+    },
   };
 }
 
@@ -786,6 +931,67 @@ async function githubUpdateFile(env, { path, branch, message, content, sha }) {
   }
 
   return response.json();
+}
+
+async function githubDispatchWorkflow({ token, owner, repo, workflowFile, ref, patchB64 }) {
+  const endpoint = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${encodeURIComponent(workflowFile)}/dispatches`;
+  const payload = {
+    ref,
+    inputs: {
+      patch_b64: patchB64,
+    },
+  };
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: githubHeaders(token),
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    return {
+      ok: false,
+      status: response.status,
+      error: `GitHub workflow dispatch failed (${response.status})`,
+      details: text,
+    };
+  }
+
+  return { ok: true };
+}
+
+async function githubFindRecentWorkflowRun({ token, owner, repo, workflowFile, ref }) {
+  const endpoint = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${encodeURIComponent(workflowFile)}/runs?event=workflow_dispatch&branch=${encodeURIComponent(ref)}&per_page=5`;
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      const response = await fetch(endpoint, { headers: githubHeaders(token) });
+      if (response.ok) {
+        const payload = await response.json();
+        const runs = Array.isArray(payload.workflow_runs) ? payload.workflow_runs : [];
+        if (runs.length > 0) {
+          const run = runs[0];
+          return {
+            runId: run.id || null,
+            runUrl: run.html_url || null,
+          };
+        }
+      }
+    } catch (_error) {
+      // Ignore run lookup failures; dispatch already succeeded.
+    }
+
+    if (attempt < 3) {
+      await sleep(800);
+    }
+  }
+
+  return { runId: null, runUrl: null };
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function githubHeaders(token) {

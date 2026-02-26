@@ -4,6 +4,7 @@ This worker provides two admin endpoints for the static Chef Dashboard frontend:
 
 - `POST /extract`
 - `POST /apply`
+- `POST /api/applyPatch`
 
 ## Endpoints
 
@@ -59,6 +60,39 @@ Behavior:
 Dry run:
 - `POST /apply?dryRun=true` validates and returns `updatedFile` without committing.
 
+Fallback patch response:
+- If direct GitHub commit is unavailable, `/apply` returns `status: "patch_required"` with a `patch` payload for workflow dispatch.
+
+### `POST /api/applyPatch`
+Headers:
+- `x-admin-secret: <ADMIN_SECRET>` (required if `ADMIN_SECRET` exists)
+
+Request body (either shape):
+
+```json
+{
+  "patch": { "...": "patch json" }
+}
+```
+
+or direct patch object:
+
+```json
+{
+  "menu": "dinner",
+  "week": 2,
+  "day": "Wednesday",
+  "dishSlotId": "dinner:week2:Wednesday:Dessert",
+  "dishSlotKey": "Dessert",
+  "recipeData": { "...": "..." }
+}
+```
+
+Behavior:
+- Base64-encodes patch JSON.
+- Dispatches GitHub Actions workflow (`workflow_dispatch`) with input `patch_b64`.
+- Returns `{ ok: true, runUrl }` when dispatch accepted.
+
 ## Required environment variables
 
 Set these as Cloudflare worker secrets/vars:
@@ -69,9 +103,15 @@ Set these as Cloudflare worker secrets/vars:
 - `GITHUB_OWNER` (var)
 - `GITHUB_REPO` (var)
 - `GITHUB_BRANCH` (var, optional, default `main`)
+- `GH_TOKEN` (secret, for Actions workflow dispatch)
+- `GH_OWNER` (var)
+- `GH_REPO` (var)
+- `GH_WORKFLOW_FILE` (var, e.g. `apply-recipe-patch.yml`)
+- `GH_REF` (var, branch/tag for dispatch, e.g. `main`)
 
 Suggested GitHub token scope:
 - Fine-grained PAT with repository `Contents: Read and write` on the target repo.
+- For workflow dispatch via `/api/applyPatch`: token also needs `Actions: Read and write`.
 
 ## Deploy
 

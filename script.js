@@ -1289,6 +1289,30 @@ function refreshUpdateDishOptions() {
   }
 }
 
+async function queuePatchApply(apiBase, adminSecret, patch) {
+  const endpoint = `${apiBase}/api/applyPatch`;
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-admin-secret': adminSecret || '',
+    },
+    body: JSON.stringify({ patch }),
+  });
+
+  const rawText = await response.text();
+  const data = safeParse(rawText, null);
+
+  if (!response.ok) {
+    throw new Error(`Patch dispatch failed (${response.status}): ${rawText}`);
+  }
+  if (!data || data.ok !== true) {
+    throw new Error((data && data.error) || rawText || 'Patch dispatch failed.');
+  }
+
+  return data;
+}
+
 async function handleExtractPreview() {
   const apiBase = getApiBaseUrl();
   const url = document.getElementById('recipeUrlInput').value.trim();
@@ -1396,15 +1420,18 @@ async function handleApplyUpdate() {
       throw new Error(data?.error || rawText || 'Unknown error (no body)');
     }
 
-    if (data.status === 'patch_required') {
-      downloadPatchJson();
-      const command = data.command || 'node scripts/applyRecipePatch.js <patch.json>';
-      setUpdateStatus(`Patch generated. To apply: ${command} then git add/commit/push.`, false);
+    if (dryRun) {
+      setUpdateStatus('Dry run succeeded. Validation passed and no commit was made.', false);
       return;
     }
 
-    if (dryRun) {
-      setUpdateStatus('Dry run succeeded. Validation passed and no commit was made.', false);
+    if (data.status === 'patch_required' || data.patch) {
+      const patchForDispatch = data.patch || patch;
+      setUpdateStatus('Patch validated. Queueing GitHub Actions apply...', false);
+      const dispatch = await queuePatchApply(apiBase, adminSecret, patchForDispatch);
+      const runUrl = asString(dispatch.runUrl).trim();
+      const runSuffix = runUrl ? ` Track run: ${runUrl}` : '';
+      setUpdateStatus(`Update queued in GitHub Actions.${runSuffix}`, false);
       return;
     }
 

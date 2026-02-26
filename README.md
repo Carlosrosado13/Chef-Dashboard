@@ -33,7 +33,9 @@ node er/applyRecipePatch.js path/to/patch.json
 
 ### Notes
 
-- `Apply Update` in the UI is now a local workflow helper (no backend commit).
+- `Apply Update` can run in two modes:
+  - Local mode (no admin secret): updates local storage only.
+  - Backend mode (admin secret): uses Worker `/apply`, and can auto-queue `/api/applyPatch`.
 - Patch JSON contains stable identifiers: `menu`, `week`, `day`, `dishSlotId`, `dishSlotKey`, and `recipeData`.
 - `er/applyRecipePatch.js` updates the correct recipe file and menu slot entry.
 
@@ -46,6 +48,25 @@ Worker code and deploy instructions:
 - `backend/update-recipes-worker/README.md`
 
 Use backend for extraction endpoint (`/extract`) only in this workflow.
+
+### Automatic Apply Setup (Worker + GitHub Actions)
+
+To enable automatic patch apply (`Apply Update` queues GitHub Actions):
+
+1. Add workflow file: `.github/workflows/apply-recipe-patch.yml`
+2. Configure Worker secrets/vars:
+   - `GH_TOKEN` (Fine-grained PAT)
+   - `GH_OWNER` (e.g. `your-org`)
+   - `GH_REPO` (e.g. `chef-dashboard`)
+   - `GH_WORKFLOW_FILE=apply-recipe-patch.yml`
+   - `GH_REF=main`
+3. Token permissions required on `GH_TOKEN`:
+   - Repository `Contents: Read and write`
+   - Repository `Actions: Read and write`
+4. Frontend flow:
+   - UI calls `/apply`
+   - If patch workflow is needed, UI auto-calls `/api/applyPatch`
+   - UI shows queued status and workflow run link (when returned)
 
 ### Existing extraction workflow
 
