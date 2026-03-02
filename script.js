@@ -1117,6 +1117,23 @@ function getSelectedUpdateContext() {
   return { menu, week, day, dishSelect, selected };
 }
 
+function deriveOldDishNameFromOption(optionEl) {
+  if (!optionEl) return '';
+  const datasetDishName = asString(optionEl.dataset && optionEl.dataset.dishName).trim();
+  if (datasetDishName) return datasetDishName;
+
+  const labelText = asString(optionEl.textContent).trim();
+  if (!labelText) return '';
+
+  const separatorIndex = labelText.indexOf(':');
+  if (separatorIndex >= 0) {
+    const parsedDishName = labelText.slice(separatorIndex + 1).trim();
+    if (parsedDishName) return parsedDishName;
+  }
+
+  return labelText;
+}
+
 function buildRecipePatchPayload() {
   const { menu, week, day, selected } = getSelectedUpdateContext();
   if (!selected || !selected.value) {
@@ -1129,6 +1146,9 @@ function buildRecipePatchPayload() {
     throw new Error('Extracted recipe is malformed. Need title, ingredients[], and steps[].');
   }
   const normalizedDraft = normalizeExtractedRecipe(extractedRecipeDraft);
+  const derivedOldDishName = deriveOldDishNameFromOption(selected);
+  const oldDishName = asString(selected.dataset.dishName).trim() || derivedOldDishName;
+  const oldRecipeKey = asString(selected.dataset.recipeKey).trim() || oldDishName;
 
   return {
     patchVersion: 1,
@@ -1138,8 +1158,8 @@ function buildRecipePatchPayload() {
     day,
     dishSlotId: selected.value,
     dishSlotKey: selected.dataset.slot,
-    oldDishName: selected.dataset.dishName || '',
-    oldRecipeKey: selected.dataset.recipeKey || '',
+    oldDishName,
+    oldRecipeKey,
     recipeData: {
       title: normalizedDraft.title || '',
       servings: normalizedDraft.servings || '',
@@ -1392,7 +1412,7 @@ async function handleApplyUpdate() {
       recipeKey: patch.oldRecipeKey || patch.oldDishName || '',
       recipeJson: patch.recipeData,
     };
-    console.log('Apply payload:', payload);
+    console.log('Apply payload:', JSON.stringify(payload));
 
     setUpdateStatus(dryRun ? 'Running apply dry-run...' : 'Applying update and committing to GitHub...', false);
 
