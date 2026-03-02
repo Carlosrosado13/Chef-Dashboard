@@ -52,6 +52,7 @@ export default {
       }
 
       if (request.method === 'POST' && (
+        url.pathname === '/dispatchPatch' ||
         url.pathname === '/api/dispatchPatch' ||
         url.pathname === '/api/applyPatch' ||
         url.pathname === '/applyPatch'
@@ -222,13 +223,23 @@ async function handleApply(request, env) {
   }
 
   const commitMessage = `Auto apply recipe update: ${menu === 'dinner' ? 'Dinner' : 'Lunch'} W${week} ${day} ${dishSlotId}`;
-  const commit = await githubUpdateFile(env, {
-    path: targetPath,
-    branch,
-    message: commitMessage,
-    content: updatedFileContent,
-    sha: fileInfo.sha,
-  });
+  let commit;
+  try {
+    commit = await githubUpdateFile(env, {
+      path: targetPath,
+      branch,
+      message: commitMessage,
+      content: updatedFileContent,
+      sha: fileInfo.sha,
+    });
+  } catch (error) {
+    return json({
+      ok: true,
+      status: 'patch_required',
+      patch,
+      error: `Auto-commit failed; dispatch patch workflow instead. ${error.message || String(error)}`,
+    }, 200);
+  }
 
   return json({
     ok: true,
@@ -300,7 +311,7 @@ async function handleDispatchPatch(request, env) {
 
   return json({
     ok: true,
-    status: 'Dispatched workflow',
+    status: 'Dispatched',
     workflowFile,
     ref,
     runId: runMeta.runId || null,

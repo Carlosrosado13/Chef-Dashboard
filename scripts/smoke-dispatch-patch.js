@@ -12,7 +12,7 @@ function getApiBase() {
 
 async function main() {
   const apiBase = getApiBase();
-  const url = `${apiBase}/api/dispatchPatch`;
+  const url = `${apiBase}/dispatchPatch`;
   const adminSecret = process.env.CHEF_ADMIN_SECRET || '';
 
   const fakePatch = {

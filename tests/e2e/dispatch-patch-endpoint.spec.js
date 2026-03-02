@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-test('Apply Update dispatches patch to /api/dispatchPatch', async ({ page }) => {
+test('Apply Update dispatches patch to /dispatchPatch', async ({ page }) => {
   let dispatchCalled = false;
   let dispatchStatus = 0;
 
@@ -15,7 +15,7 @@ test('Apply Update dispatches patch to /api/dispatchPatch', async ({ page }) => 
       contentType: 'application/json',
       body: JSON.stringify({
         ok: true,
-        status: 'patch_required',
+        status: 'Patch generated (not auto-applied to GitHub)',
         patch: {
           patchVersion: 1,
           createdAt: new Date().toISOString(),
@@ -39,7 +39,7 @@ test('Apply Update dispatches patch to /api/dispatchPatch', async ({ page }) => 
     });
   });
 
-  await page.route('**/api/dispatchPatch', async (route) => {
+  await page.route('**/dispatchPatch', async (route) => {
     dispatchCalled = true;
     dispatchStatus = 200;
     await route.fulfill({
@@ -47,7 +47,7 @@ test('Apply Update dispatches patch to /api/dispatchPatch', async ({ page }) => 
       contentType: 'application/json',
       body: JSON.stringify({
         ok: true,
-        status: 'Dispatched workflow',
+        status: 'Dispatched',
         runUrl: 'https://github.com/example/repo/actions/runs/123'
       })
     });
