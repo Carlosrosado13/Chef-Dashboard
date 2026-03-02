@@ -51,16 +51,24 @@ export default {
         return await handleApply(request, env);
       }
 
-      if (request.method === 'POST' && (
+      if (
         url.pathname === '/dispatchPatch' ||
         url.pathname === '/api/dispatchPatch' ||
         url.pathname === '/api/applyPatch' ||
         url.pathname === '/applyPatch'
-      )) {
+      ) {
+        if (request.method !== 'POST') {
+          return json({
+            ok: false,
+            error: 'Method not allowed',
+            method: request.method,
+            path: url.pathname,
+          }, 405);
+        }
         return await handleDispatchPatch(request, env);
       }
 
-      return json({ ok: false, error: 'Endpoint not found', path: url.pathname }, 404);
+      return json({ ok: false, error: 'Endpoint not found', method: request.method, path: url.pathname }, 404);
     } catch (error) {
       return json({ ok: false, error: error.message || String(error) }, 500);
     }
