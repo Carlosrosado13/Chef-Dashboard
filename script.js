@@ -1289,16 +1289,14 @@ function refreshUpdateDishOptions() {
   }
 }
 
-async function queuePatchApply(apiBase, adminSecret, patch) {
-  const endpoint = `${apiBase}/dispatchPatch`;
-  console.log('Dispatch URL:', endpoint);
-  const response = await fetch(endpoint, {
+async function queuePatchApply(dispatchUrl, adminSecret, patch) {
+  const response = await fetch(dispatchUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'x-admin-secret': adminSecret || '',
     },
-    body: JSON.stringify({ patch }),
+      body: JSON.stringify({ patch }),
   });
 
   const rawText = await response.text();
@@ -1377,7 +1375,10 @@ async function handleApplyUpdate() {
     }
 
     const dryRun = isApplyDryRunEnabled();
-    const applyUrl = `${apiBase}/apply${dryRun ? '?dryRun=true' : ''}`;
+    const apiBaseUrl = apiBase.replace(/\/+$/, '');
+    const applyUrl = `${apiBaseUrl}/apply${dryRun ? '?dryRun=true' : ''}`;
+    const dispatchUrl = `${apiBaseUrl}/dispatchPatch`;
+    console.log('applyUrl', applyUrl, 'dispatchUrl', dispatchUrl);
     console.log('Apply URL:', applyUrl);
     const payload = {
       menu: patch.menu === 'dinner' ? 'Dinner' : 'Lunch',
@@ -1440,7 +1441,7 @@ async function handleApplyUpdate() {
         throw new Error('Patch dispatch requested but patch payload is missing.');
       }
       setUpdateStatus('Patch validated. Queueing GitHub Actions apply...', false);
-      const dispatch = await queuePatchApply(apiBase, adminSecret, patchForDispatch);
+      const dispatch = await queuePatchApply(dispatchUrl, adminSecret, patchForDispatch);
       const runUrl = asString(dispatch.runUrl).trim();
       const runSuffix = runUrl ? ` Track run: ${runUrl}` : '';
       setUpdateStatus(`Update queued in GitHub Actions.${runSuffix}`, false);

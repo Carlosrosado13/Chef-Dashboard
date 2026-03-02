@@ -298,7 +298,7 @@ async function handleDispatchPatch(request, env) {
       error: dispatch.error || 'Failed to dispatch GitHub workflow.',
       details: dispatch.details || null,
       status: dispatch.status || null,
-    }, 502);
+    }, 500);
   }
 
   const runMeta = await githubFindRecentWorkflowRun({
@@ -311,7 +311,7 @@ async function handleDispatchPatch(request, env) {
 
   return json({
     ok: true,
-    status: 'Dispatched',
+    status: 'Dispatched workflow',
     workflowFile,
     ref,
     runId: runMeta.runId || null,
