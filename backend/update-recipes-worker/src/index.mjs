@@ -1,6 +1,6 @@
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST,OPTIONS',
+  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type,x-admin-secret',
 };
 
@@ -43,6 +43,28 @@ export default {
     const url = new URL(request.url);
 
     try {
+      if (request.method === 'GET' && url.pathname === '/') {
+        return json({
+          ok: true,
+          endpoints: [
+            'GET /',
+            'POST /',
+            'POST /dispatch',
+            'POST /extract',
+            'POST /apply',
+            'POST /dispatchPatch',
+            'POST /api/dispatchPatch',
+            'POST /api/applyPatch',
+            'POST /applyPatch',
+          ],
+          note: 'Use POST to dispatch',
+        }, 200);
+      }
+
+      if (request.method === 'POST' && (url.pathname === '/' || url.pathname === '/dispatch')) {
+        return await handleWorkflowDispatch(request, env);
+      }
+
       if (request.method === 'POST' && url.pathname === '/extract') {
         return await handleExtract(request);
       }
@@ -74,6 +96,47 @@ export default {
     }
   },
 };
+
+async function handleWorkflowDispatch(_request, env) {
+  const ghToken = env.GH_TOKEN;
+  const ghOwner = env.GH_OWNER;
+  const ghRepo = env.GH_REPO;
+  const workflowFile = env.GH_WORKFLOW_FILE;
+  const ref = env.GH_REF || env.GITHUB_BRANCH || 'main';
+
+  if (!ghToken || !ghOwner || !ghRepo || !workflowFile) {
+    return json({
+      ok: false,
+      error: 'Missing workflow dispatch configuration.',
+      missing: {
+        GH_TOKEN: !ghToken,
+        GH_OWNER: !ghOwner,
+        GH_REPO: !ghRepo,
+        GH_WORKFLOW_FILE: !workflowFile,
+      },
+    }, 500);
+  }
+
+  const dispatch = await githubDispatchWorkflow({
+    token: ghToken,
+    owner: ghOwner,
+    repo: ghRepo,
+    workflowFile,
+    ref,
+  });
+
+  if (!dispatch.ok) {
+    const status = [401, 403, 404, 422].includes(dispatch.status) ? dispatch.status : 500;
+    return json({
+      ok: false,
+      error: dispatch.error || 'Failed to dispatch GitHub workflow.',
+      status: dispatch.status || null,
+      details: dispatch.details || null,
+    }, status);
+  }
+
+  return json({ ok: true, status: 'Dispatched workflow' }, 200);
+}
 
 async function handleExtract(request) {
   const body = await parseJsonBody(request);
@@ -301,12 +364,13 @@ async function handleDispatchPatch(request, env) {
   });
 
   if (!dispatch.ok) {
+    const statusCode = [401, 403, 404, 422].includes(dispatch.status) ? dispatch.status : 500;
     return json({
       ok: false,
       error: dispatch.error || 'Failed to dispatch GitHub workflow.',
       details: dispatch.details || null,
       status: dispatch.status || null,
-    }, 500);
+    }, statusCode);
   }
 
   const runMeta = await githubFindRecentWorkflowRun({
@@ -958,12 +1022,10 @@ async function githubUpdateFile(env, { path, branch, message, content, sha }) {
 
 async function githubDispatchWorkflow({ token, owner, repo, workflowFile, ref, patchB64 }) {
   const endpoint = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${encodeURIComponent(workflowFile)}/dispatches`;
-  const payload = {
-    ref,
-    inputs: {
-      patch_b64: patchB64,
-    },
-  };
+  const payload = { ref };
+  if (patchB64) {
+    payload.inputs = { patch_b64: patchB64 };
+  }
 
   const response = await fetch(endpoint, {
     method: 'POST',

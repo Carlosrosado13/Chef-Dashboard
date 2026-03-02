@@ -4,5 +4,4 @@ compatibility_date = "2026-02-22"
 
 [vars]
 GITHUB_BRANCH = "main"
-GH_WORKFLOW_FILE = "apply-recipe-patch.yml"
 GH_REF = "main"
