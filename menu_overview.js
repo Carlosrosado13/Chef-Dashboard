@@ -121,7 +121,7 @@ const menuOverviewData = {
       "Veg 1": "Charred Okra",
       "Veg 2": "Roasted Beets",
       "Starch": "Coconut Rice",
-      "Dessert": "Pear & Almond Crostata"
+      "Dessert": "NEW DESSERT TITLE HERE"
     },
     "Thursday": {
       "Appetizer 1": "Hot Appetizer: Pork Belly Bao",

@@ -1,0 +1,18 @@
+﻿{
+  "menu": "dinner",
+  "week": 2,
+  "day": "Wednesday",
+  "dishSlotId": "dessert",
+  "dishSlotKey": "Dessert",
+  "oldRecipeKey": "Pear & Almond Crostata",
+  "recipeData": {
+    "title": "NEW DESSERT TITLE HERE",
+    "ingredients": [
+      { "name": "Ingredient 1", "amount": "..." }
+    ],
+    "steps": [
+      "Step 1",
+      "Step 2"
+    ]
+  }
+}
