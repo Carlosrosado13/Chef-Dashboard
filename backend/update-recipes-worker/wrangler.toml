@@ -1,7 +1,8 @@
 name = "chef-dashboard-update-recipes"
-main = "src/index.mjs"
+main = "src/index.js"
 compatibility_date = "2026-02-22"
 
 [vars]
-GITHUB_BRANCH = "main"
-GH_REF = "main"
+GH_OWNER = "Carlosrosado13"
+GH_REPO = "Chef-Dashboard"
+GH_BRANCH = "main"

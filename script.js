@@ -1309,29 +1309,6 @@ function refreshUpdateDishOptions() {
   }
 }
 
-async function queuePatchApply(dispatchUrl, adminSecret, patch) {
-  const response = await fetch(dispatchUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-admin-secret': adminSecret || '',
-    },
-      body: JSON.stringify({ patch }),
-  });
-
-  const rawText = await response.text();
-  const data = safeParse(rawText, null);
-
-  if (!response.ok) {
-    throw new Error(`Patch dispatch failed (${response.status}): ${rawText}`);
-  }
-  if (!data || data.ok !== true) {
-    throw new Error((data && data.error) || rawText || 'Patch dispatch failed.');
-  }
-
-  return data;
-}
-
 async function handleExtractPreview() {
   const apiBase = getApiBaseUrl();
   const url = document.getElementById('recipeUrlInput').value.trim();
@@ -1397,20 +1374,18 @@ async function handleApplyUpdate() {
     const dryRun = isApplyDryRunEnabled();
     const apiBaseUrl = apiBase.replace(/\/+$/, '');
     const applyUrl = `${apiBaseUrl}/apply${dryRun ? '?dryRun=true' : ''}`;
-    const dispatchUrl = `${apiBaseUrl}/api/dispatchPatch`;
-    console.log('applyUrl', applyUrl, 'dispatchUrl', dispatchUrl);
+    console.log('applyUrl', applyUrl);
     console.log('Apply URL:', applyUrl);
+    const newDishName = asString(patch?.recipeData?.title).trim() || asString(patch.oldDishName).trim();
+    const newRecipeHtml = asString(patch?.recipeData?.generatedHtml) || buildGeneratedRecipeHtml(patch.recipeData);
     const payload = {
-      menu: patch.menu === 'dinner' ? 'Dinner' : 'Lunch',
+      menu: patch.menu === 'dinner' ? 'dinner' : 'lunch',
       week: patch.week,
       day: patch.day,
-      dishSlotId: patch.dishSlotId,
-      extractedRecipe: patch.recipeData,
-      dishId: patch.dishSlotId,
-      dishSlot: patch.dishSlotKey,
-      dishName: patch.oldDishName || '',
-      recipeKey: patch.oldRecipeKey || patch.oldDishName || '',
-      recipeJson: patch.recipeData,
+      slotKey: patch.dishSlotKey,
+      oldDishName: patch.oldDishName || '',
+      newDishName,
+      newRecipeHtml,
     };
     console.log('Apply payload:', JSON.stringify(payload));
 
@@ -1436,7 +1411,14 @@ async function handleApplyUpdate() {
     console.log('Apply response parsed:', data);
 
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${rawText}`);
+      const backendError = (data && data.error) || rawText || '';
+      if (res.status === 401) {
+        throw new Error(`Unauthorized (401): check Admin Secret. ${backendError}`.trim());
+      }
+      if (res.status === 400) {
+        throw new Error(`Bad request (400): ${backendError || 'Invalid apply payload.'}`);
+      }
+      throw new Error(`HTTP ${res.status}: ${backendError}`);
     }
 
     if (!data || data.ok !== true) {
@@ -1448,39 +1430,16 @@ async function handleApplyUpdate() {
       return;
     }
 
-    const applyStatusText = String((data && data.status) || '').toLowerCase();
-    const needsPatchDispatch = (
-      data.status === 'patch_required' ||
-      applyStatusText.includes('patch generated') ||
-      Boolean(data.patch)
-    );
-
-    if (needsPatchDispatch) {
-      const patchForDispatch = data.patch || patch;
-      if (!patchForDispatch || typeof patchForDispatch !== 'object') {
-        throw new Error('Patch dispatch requested but patch payload is missing.');
-      }
-      setUpdateStatus('Patch validated. Queueing GitHub Actions apply...', false);
-      const dispatch = await queuePatchApply(dispatchUrl, adminSecret, patchForDispatch);
-      const runUrl = asString(dispatch.runUrl).trim();
-      const runSuffix = runUrl ? ` Track run: ${runUrl}` : '';
-      setUpdateStatus(`Update queued in GitHub Actions.${runSuffix}`, false);
-      return;
-    }
-
-    const sha = data.commitSha ? `Commit: ${data.commitSha}` : 'Commit: n/a';
-    const file = data.updatedFile ? ` File: ${data.updatedFile}.` : '';
-    if (data.commitSha) {
-      console.log('Apply commitSha:', data.commitSha);
-    }
-    const url = data.url || data.commitUrl || '';
-    const suffix = url ? ` ${url}` : '';
+    const recipeSha = asString(data.recipeCommitSha).trim();
+    const menuSha = asString(data.menuCommitSha).trim();
+    const recipeInfo = recipeSha ? `Recipe commit: ${recipeSha}. ` : '';
+    const menuInfo = menuSha ? `Menu commit: ${menuSha}. ` : '';
     buildIngredientCheckerData();
     renderMenuRow();
     renderIngredients();
     renderWeeklyView(document.getElementById('weekSelect').value);
     refreshUpdateDishOptions();
-    setUpdateStatus(`${sha}.${file}${suffix} GitHub Pages may take 1-3 minutes; hard refresh (Ctrl+F5).`, false);
+    setUpdateStatus(`${recipeInfo}${menuInfo}Update applied to GitHub. GitHub Pages may take 1-3 minutes; hard refresh (Ctrl+F5).`, false);
   } catch (error) {
     console.error('Update apply failed:', error);
     setUpdateStatus(error.message || String(error), true);
