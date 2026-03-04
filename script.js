@@ -180,7 +180,7 @@ const REPORT_BASE_PATH = 'data/reports';
 const API_BASE_STORAGE_KEY = 'chefDashboardApiBaseUrl';
 const RECIPE_OVERRIDES_STORAGE_KEY = 'chefDashboardRecipeOverridesV1';
 const LEGACY_RECIPE_OVERRIDES_STORAGE_KEY = 'chefDashboardRecipeOverrides';
-const DEFAULT_API_BASE_URL = 'https://chef-dashboard-api.carlosrosado13.workers.dev';
+const DEFAULT_API_BASE_URL = 'https://chef-dashboard-update-recipes.carlosrosado13.workers.dev';
 const WEEKLY_DAY_KEYS = {
   Monday: ['Monday', 'Mon'],
   Tuesday: ['Tuesday', 'Tue', 'Tues'],
@@ -1397,7 +1397,7 @@ async function handleApplyUpdate() {
     const dryRun = isApplyDryRunEnabled();
     const apiBaseUrl = apiBase.replace(/\/+$/, '');
     const applyUrl = `${apiBaseUrl}/apply${dryRun ? '?dryRun=true' : ''}`;
-    const dispatchUrl = `${apiBaseUrl}/dispatchPatch`;
+    const dispatchUrl = `${apiBaseUrl}/api/dispatchPatch`;
     console.log('applyUrl', applyUrl, 'dispatchUrl', dispatchUrl);
     console.log('Apply URL:', applyUrl);
     const payload = {

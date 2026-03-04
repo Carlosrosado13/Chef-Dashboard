@@ -118,13 +118,13 @@ Suggested GitHub token scope:
 
 From `backend/update-recipes-worker`:
 
-```bash
+```powershell
 npm i -g wrangler
-wrangler secret put OPENAI_API_KEY
-wrangler secret put GITHUB_TOKEN
-wrangler secret put ADMIN_SECRET
-wrangler secret put GH_TOKEN
-wrangler deploy
+wrangler secret put OPENAI_API_KEY --name chef-dashboard-update-recipes
+wrangler secret put GITHUB_TOKEN --name chef-dashboard-update-recipes
+wrangler secret put ADMIN_SECRET --name chef-dashboard-update-recipes
+wrangler secret put GH_TOKEN --name chef-dashboard-update-recipes
+wrangler deploy --config .\wrangler.toml
 ```
 
 Set vars in `wrangler.toml` or dashboard:

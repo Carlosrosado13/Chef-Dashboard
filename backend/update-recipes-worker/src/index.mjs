@@ -140,7 +140,7 @@ async function handleWorkflowDispatch(_request, env) {
   if (!ghToken || !ghOwner || !ghRepo || !workflowFile) {
     return json({
       ok: false,
-      error: 'Missing workflow dispatch configuration.',
+      error: 'Server misconfigured: GH_TOKEN / GH_OWNER / GH_REPO / GH_WORKFLOW_FILE must be set as Worker secrets/vars.',
       missing: {
         GH_TOKEN: !ghToken,
         GH_OWNER: !ghOwner,
@@ -374,16 +374,16 @@ async function handleDispatchPatch(request, env) {
   );
   const patchB64 = encodeBase64(JSON.stringify(patch));
 
-  const ghToken = env.GH_TOKEN || env.GITHUB_TOKEN;
-  const ghOwner = env.GH_OWNER || env.GITHUB_OWNER;
-  const ghRepo = env.GH_REPO || env.GITHUB_REPO;
-  const workflowFile = env.GH_WORKFLOW_FILE || 'apply-recipe-patch.yml';
+  const ghToken = env.GH_TOKEN;
+  const ghOwner = env.GH_OWNER;
+  const ghRepo = env.GH_REPO;
+  const workflowFile = env.GH_WORKFLOW_FILE;
   const ref = env.GH_REF || env.GITHUB_BRANCH || 'main';
 
   if (!ghToken || !ghOwner || !ghRepo || !workflowFile || !ref) {
     return json({
       ok: false,
-      error: 'Missing workflow dispatch configuration.',
+      error: 'Server misconfigured: GH_TOKEN / GH_OWNER / GH_REPO / GH_WORKFLOW_FILE must be set as Worker secrets/vars.',
       missing: {
         GH_TOKEN: !ghToken,
         GH_OWNER: !ghOwner,
