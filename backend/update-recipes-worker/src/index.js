@@ -31,12 +31,16 @@ export default {
       if (request.method === 'GET' && url.pathname === '/') {
         return json({
           ok: true,
-          endpoints: ['GET /', 'POST /extract', 'POST /apply'],
+          endpoints: ['GET /', 'POST /extract', 'POST /apply', 'POST /admin/update'],
         }, 200);
       }
 
       if (request.method === 'POST' && url.pathname === '/extract') {
         return await handleExtract(request);
+      }
+
+      if (request.method === 'POST' && url.pathname === '/admin/update') {
+        return json({ ok: true }, 200);
       }
 
       if (request.method === 'POST' && url.pathname === '/apply') {
@@ -243,31 +247,105 @@ async function handleApply(request, env) {
 }
 
 function parseDataScript(scriptText, varName) {
-  const runtime = { window: {}, globalThis: {}, self: {}, module: { exports: {} }, exports: {} };
-  runtime.globalThis = runtime;
-  runtime.window = runtime;
-  runtime.self = runtime;
+  // Supports:
+  //  - const menuOverviewData = {...};
+  //  - let/var menuOverviewData = {...};
+  //  - export const menuOverviewData = {...};
+  //  - menuOverviewData = {...};
+  //
+  // It does NOT execute code. It only extracts the object literal and JSON-parses it.
 
-  const fn = new Function(
-    'window',
-    'globalThis',
-    'self',
-    'module',
-    'exports',
-    `${scriptText}\nreturn {
-      recipesData: typeof recipesData !== 'undefined' ? recipesData : undefined,
-      recipesLunchData: typeof recipesLunchData !== 'undefined' ? recipesLunchData : undefined,
-      menuOverviewData: typeof menuOverviewData !== 'undefined' ? menuOverviewData : undefined,
-      lunchMenuData: typeof lunchMenuData !== 'undefined' ? lunchMenuData : undefined
-    };`
-  );
+  const patterns = [
+    new RegExp(`export\\s+const\\s+${escapeRegExp(varName)}\\s*=\\s*\\{`, 'm'),
+    new RegExp(`const\\s+${escapeRegExp(varName)}\\s*=\\s*\\{`, 'm'),
+    new RegExp(`let\\s+${escapeRegExp(varName)}\\s*=\\s*\\{`, 'm'),
+    new RegExp(`var\\s+${escapeRegExp(varName)}\\s*=\\s*\\{`, 'm'),
+    new RegExp(`${escapeRegExp(varName)}\\s*=\\s*\\{`, 'm'),
+  ];
 
-  const locals = fn(runtime, runtime, runtime, runtime.module, runtime.exports) || {};
-  const value = runtime[varName] || locals[varName];
-  if (!value || typeof value !== 'object') {
-    throw createError(400, `Could not parse ${varName} from script`);
+  let startIndex = -1;
+
+  for (const re of patterns) {
+    const match = re.exec(scriptText);
+    if (match) {
+      // index points at start of match, we need the first "{"
+      const bracePos = scriptText.indexOf('{', match.index);
+      if (bracePos !== -1) {
+        startIndex = bracePos;
+        break;
+      }
+    }
   }
+
+  if (startIndex === -1) {
+    throw createError(400, `Could not find ${varName} assignment in script`);
+  }
+
+  const endIndex = findMatchingBrace(scriptText, startIndex);
+  if (endIndex === -1) {
+    throw createError(400, `Could not parse ${varName}: unmatched braces`);
+  }
+
+  const objectLiteral = scriptText.slice(startIndex, endIndex + 1);
+
+  // Your menu_overview.js looks JSON-safe already (double quotes everywhere),
+  // so JSON.parse will work.
+  // If later you have trailing commas, you’ll need a sanitizer.
+  let value;
+  try {
+    value = JSON.parse(objectLiteral);
+  } catch (err) {
+    throw createError(400, `Could not JSON-parse ${varName}. Ensure it uses double quotes and no trailing commas.`);
+  }
+
+  if (!value || typeof value !== 'object') {
+    throw createError(400, `Parsed ${varName} is not an object`);
+  }
+
   return value;
+}
+
+function findMatchingBrace(text, openBraceIndex) {
+  let depth = 0;
+  let inString = false;
+  let stringQuote = '';
+  let escape = false;
+
+  for (let i = openBraceIndex; i < text.length; i++) {
+    const ch = text[i];
+
+    if (inString) {
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (ch === '\\') {
+        escape = true;
+        continue;
+      }
+      if (ch === stringQuote) {
+        inString = false;
+        stringQuote = '';
+      }
+      continue;
+    } else {
+      if (ch === '"' || ch === "'") {
+        inString = true;
+        stringQuote = ch;
+        continue;
+      }
+      if (ch === '{') depth++;
+      if (ch === '}') {
+        depth--;
+        if (depth === 0) return i;
+      }
+    }
+  }
+  return -1;
+}
+
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function getMenuWeek(menuData, menu, week) {
