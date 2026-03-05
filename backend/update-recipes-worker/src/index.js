@@ -10,6 +10,7 @@ const JSON_HEADERS = {
 };
 
 const ADMIN_SECRET = 'abc123';
+const BUILD = 'index.js-build-2026-03-05-a';
 
 const DAY_ALIASES = {
   monday: ['Monday', 'Mon'],
@@ -31,11 +32,12 @@ export default {
 
     try {
       if (request.method === 'GET' && url.pathname === '/') {
-        return json({
-          ok: true,
-          endpoints: ['GET /', 'POST /extract', 'POST /apply', 'POST /admin/update'],
-        }, 200);
-      }
+  return json({
+    ok: true,
+    build: BUILD,
+    endpoints: ['GET /', 'POST /extract', 'POST /apply', 'POST /admin/update'],
+  }, 200);
+}
 
       if (request.method === 'POST' && url.pathname === '/extract') {
         return await handleExtract(request);
