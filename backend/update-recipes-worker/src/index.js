@@ -23,7 +23,7 @@ const DAY_ALIASES = {
 };
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
@@ -44,14 +44,127 @@ export default {
       }
 
       if (request.method === 'POST' && url.pathname === '/admin/update') {
-        const providedSecret = request.headers.get('x-admin-secret') || '';
-        if (providedSecret !== ADMIN_SECRET) {
-          return json({ ok: false, error: 'Unauthorized: invalid x-admin-secret.' }, 401);
-        }
+  const providedSecret = request.headers.get('x-admin-secret') || '';
+  if (providedSecret !== ADMIN_SECRET) {
+    return json({ ok: false, error: 'Unauthorized: invalid x-admin-secret.' }, 401);
+  }
+    } catch (err) {
+      return json({ ok: false, error: err.message }, 500);
+    }
+  }
+};
 
-        const body = await parseJsonBody(request);
-        return json({ ok: true, received: body }, 200);
-      }
+/* =========================================================
+   GitHub helpers (PASTE HERE)
+========================================================= */
+
+function b64EncodeUnicode(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+
+async function githubApi(env, method, url, bodyObj = null) {
+  if (!env.GH_TOKEN) {
+    throw new Error("Missing GH_TOKEN secret");
+  }
+
+  const init = {
+    method,
+    headers: {
+      "Authorization": `Bearer ${env.GH_TOKEN}`,
+      "Accept": "application/vnd.github+json",
+      "User-Agent": "chef-dashboard-update-worker",
+    },
+  };
+
+  if (bodyObj) {
+    init.headers["Content-Type"] = "application/json";
+    init.body = JSON.stringify(bodyObj);
+  }
+
+  const resp = await fetch(url, init);
+  const text = await resp.text();
+
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; }
+  catch { data = { raw: text }; }
+
+  if (!resp.ok) {
+    throw new Error(`GitHub API error ${resp.status}`);
+  }
+
+  return data;
+}
+
+async function getGithubFileSha(env, { owner, repo, path, branch }) {
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
+  const data = await githubApi(env, "GET", url);
+  return data?.sha || null;
+}
+
+async function upsertGithubFile(env, { owner, repo, path, branch, contentText, message }) {
+  let sha = null;
+
+  try {
+    sha = await getGithubFileSha(env, { owner, repo, path, branch });
+  } catch {}
+
+  const payload = {
+    message,
+    content: b64EncodeUnicode(contentText),
+    branch,
+    ...(sha ? { sha } : {})
+  };
+
+  const putUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+
+  const res = await githubApi(env, "PUT", putUrl, payload);
+
+  return {
+    path,
+    commitSha: res?.commit?.sha,
+    commitUrl: res?.commit?.html_url
+  };
+}
+  const body = await parseJsonBody(request);
+
+  // Expected body:
+  // {
+  //   "message": "optional commit message",
+  //   "updates": [
+  //     { "path": "data/recipes.js", "content": "<FULL FILE TEXT>" },
+  //     { "path": "data/menu.js", "content": "<FULL FILE TEXT>" }
+  //   ]
+  // }
+  if (!body?.updates || !Array.isArray(body.updates) || body.updates.length === 0) {
+    return json({ ok: false, error: "Body must include updates: [{path, content}, ...]" }, 400);
+  }
+
+  const results = [];
+  for (const u of body.updates) {
+    if (!u?.path || typeof u.path !== "string") {
+      return json({ ok: false, error: "Each update needs a string 'path'." }, 400);
+    }
+    if (typeof u.content !== "string") {
+      return json({ ok: false, error: "Each update needs a string 'content' (full file text)." }, 400);
+    }
+
+    const res = await upsertGithubFile(env, {
+      owner: env.GH_OWNER,
+      repo: env.GH_REPO,
+      branch: env.GH_BRANCH,
+      path: u.path,
+      contentText: u.content,
+      message: body.message || `Update ${u.path}`,
+    });
+
+    results.push(res);
+  }
+
+  return json({ ok: true, updates: results }, 200);
+}
 
       if (request.method === 'POST' && url.pathname === '/apply') {
         return await handleApply(request, env);
