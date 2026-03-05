@@ -93,7 +93,43 @@ async function handleAdminUpdate(request, env) {
     return json({ ok: false, error: "Unauthorized: invalid x-admin-secret." }, 401);
   }
   const body = await parseJsonBody(request);
-  return json({ ok: true, received: body }, 200);
+  if (!env.GH_TOKEN) {
+    throw createError(500, "Server misconfigured: GH_TOKEN is missing.");
+  }
+  if (!env.GH_OWNER || !env.GH_REPO) {
+    throw createError(500, "Server misconfigured: GH_OWNER and GH_REPO are required.");
+  }
+  const updates = Array.isArray(body.updates) ? body.updates : [];
+  if (!updates.length) {
+    return json({ ok: false, error: "Body must include updates: [{ path, content }, ...]" }, 400);
+  }
+  const owner = env.GH_OWNER;
+  const repo = env.GH_REPO;
+  const branch = env.GH_BRANCH || "main";
+  const messagePrefix = sanitizeText(body.message || "");
+  const results = [];
+  for (let i = 0; i < updates.length; i += 1) {
+    const update = updates[i] || {};
+    const path = sanitizeText(update.path || "");
+    const content = typeof update.content === "string" ? update.content : null;
+    if (!path) {
+      return json({ ok: false, error: `updates[${i}].path must be a non-empty string` }, 400);
+    }
+    if (content == null) {
+      return json({ ok: false, error: `updates[${i}].content must be a string` }, 400);
+    }
+    const commitMessage = messagePrefix || `Update ${path}`;
+    const result = await upsertGithubFile(env, {
+      owner,
+      repo,
+      branch,
+      path,
+      contentText: content,
+      message: commitMessage
+    });
+    results.push(result);
+  }
+  return json({ ok: true, updates: results }, 200);
 }
 __name(handleAdminUpdate, "handleAdminUpdate");
 async function handleApply(request, env) {
@@ -644,6 +680,77 @@ function json(payload, status = 200) {
   });
 }
 __name(json, "json");
+function b64EncodeUnicode(value) {
+  const utf8 = new TextEncoder().encode(String(value));
+  let binary = "";
+  for (let i = 0; i < utf8.length; i += 1) {
+    binary += String.fromCharCode(utf8[i]);
+  }
+  return btoa(binary);
+}
+__name(b64EncodeUnicode, "b64EncodeUnicode");
+async function githubApi(env, method, url, bodyObj = null) {
+  if (!env.GH_TOKEN) {
+    throw createError(500, "Server misconfigured: GH_TOKEN is missing.");
+  }
+  const init = {
+    method,
+    headers: {
+      "Authorization": `Bearer ${env.GH_TOKEN}`,
+      "Accept": "application/vnd.github+json",
+      "User-Agent": "chef-dashboard-update-worker-admin-update"
+    }
+  };
+  if (bodyObj != null) {
+    init.headers["Content-Type"] = "application/json";
+    init.body = JSON.stringify(bodyObj);
+  }
+  const response = await fetch(url, init);
+  const text = await response.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch (_error) {
+    data = { raw: text };
+  }
+  if (!response.ok) {
+    const err = createError(response.status, `GitHub API request failed (${response.status})`);
+    err.details = data;
+    throw err;
+  }
+  return data;
+}
+__name(githubApi, "githubApi");
+async function getGithubFileSha(env, { owner, repo, path, branch }) {
+  const endpoint = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${encodeURIComponent(branch)}`;
+  try {
+    const data = await githubApi(env, "GET", endpoint);
+    return data?.sha || null;
+  } catch (error) {
+    if (Number(error?.status) === 404) return null;
+    throw error;
+  }
+}
+__name(getGithubFileSha, "getGithubFileSha");
+async function upsertGithubFile(env, { owner, repo, path, branch, contentText, message }) {
+  const sha = await getGithubFileSha(env, { owner, repo, path, branch });
+  const endpoint = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+  const payload = {
+    message,
+    branch,
+    content: b64EncodeUnicode(contentText)
+  };
+  if (sha) payload.sha = sha;
+  const data = await githubApi(env, "PUT", endpoint, payload);
+  return {
+    path,
+    sha,
+    commitSha: data?.commit?.sha || null,
+    commitUrl: data?.commit?.html_url || null,
+    contentUrl: data?.content?.html_url || null
+  };
+}
+__name(upsertGithubFile, "upsertGithubFile");
 export {
   index_default as default
 };
