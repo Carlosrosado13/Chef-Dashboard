@@ -9,6 +9,8 @@ const JSON_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
 };
 
+const ADMIN_SECRET = 'abc123';
+
 const DAY_ALIASES = {
   monday: ['Monday', 'Mon'],
   tuesday: ['Tuesday', 'Tue', 'Tues'],
@@ -40,7 +42,13 @@ export default {
       }
 
       if (request.method === 'POST' && url.pathname === '/admin/update') {
-        return json({ ok: true }, 200);
+        const providedSecret = request.headers.get('x-admin-secret') || '';
+        if (providedSecret !== ADMIN_SECRET) {
+          return json({ ok: false, error: 'Unauthorized: invalid x-admin-secret.' }, 401);
+        }
+
+        const body = await parseJsonBody(request);
+        return json({ ok: true, received: body }, 200);
       }
 
       if (request.method === 'POST' && url.pathname === '/apply') {
