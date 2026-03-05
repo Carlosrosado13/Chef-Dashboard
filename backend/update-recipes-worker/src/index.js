@@ -311,27 +311,7 @@ function parseDataScript(scriptText, varName) {
   //
   // It does NOT execute code. It only extracts the object literal and JSON-parses it.
 
-  const patterns = [
-    new RegExp(`export\\s+const\\s+${escapeRegExp(varName)}\\s*=\\s*\\{`, 'm'),
-    new RegExp(`const\\s+${escapeRegExp(varName)}\\s*=\\s*\\{`, 'm'),
-    new RegExp(`let\\s+${escapeRegExp(varName)}\\s*=\\s*\\{`, 'm'),
-    new RegExp(`var\\s+${escapeRegExp(varName)}\\s*=\\s*\\{`, 'm'),
-    new RegExp(`${escapeRegExp(varName)}\\s*=\\s*\\{`, 'm'),
-  ];
-
-  let startIndex = -1;
-
-  for (const re of patterns) {
-    const match = re.exec(scriptText);
-    if (match) {
-      // index points at start of match, we need the first "{"
-      const bracePos = scriptText.indexOf('{', match.index);
-      if (bracePos !== -1) {
-        startIndex = bracePos;
-        break;
-      }
-    }
-  }
+  const startIndex = findObjectAssignmentStart(scriptText, varName);
 
   if (startIndex === -1) {
     throw createError(400, `Could not find ${varName} assignment in script`);
@@ -350,8 +330,16 @@ function parseDataScript(scriptText, varName) {
   let value;
   try {
     value = JSON.parse(objectLiteral);
-  } catch (err) {
-    throw createError(400, `Could not JSON-parse ${varName}. Ensure it uses double quotes and no trailing commas.`);
+  } catch (_strictParseErr) {
+    try {
+      const normalizedJson = normalizeJsObjectLiteralToJson(objectLiteral);
+      value = JSON.parse(normalizedJson);
+    } catch (_looseParseErr) {
+      throw createError(
+        400,
+        `Could not parse ${varName}. Supported assignments: const/let/var/export/window/globalThis with JSON-like object literal.`,
+      );
+    }
   }
 
   if (!value || typeof value !== 'object') {
@@ -385,7 +373,7 @@ function findMatchingBrace(text, openBraceIndex) {
       }
       continue;
     } else {
-      if (ch === '"' || ch === "'") {
+      if (ch === '"' || ch === "'" || ch === '`') {
         inString = true;
         stringQuote = ch;
         continue;
@@ -402,6 +390,107 @@ function findMatchingBrace(text, openBraceIndex) {
 
 function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function findObjectAssignmentStart(scriptText, varName) {
+  const target = escapeRegExp(varName);
+  const patterns = [
+    new RegExp(`export\\s+const\\s+${target}\\s*=\\s*\\{`, 'm'),
+    new RegExp(`const\\s+${target}\\s*=\\s*\\{`, 'm'),
+    new RegExp(`let\\s+${target}\\s*=\\s*\\{`, 'm'),
+    new RegExp(`var\\s+${target}\\s*=\\s*\\{`, 'm'),
+    new RegExp(`window\\.${target}\\s*=\\s*\\{`, 'm'),
+    new RegExp(`globalThis\\.${target}\\s*=\\s*\\{`, 'm'),
+    new RegExp(`${target}\\s*=\\s*\\{`, 'm'),
+  ];
+
+  for (const re of patterns) {
+    const match = re.exec(scriptText);
+    if (!match) continue;
+    const bracePos = scriptText.indexOf('{', match.index);
+    if (bracePos !== -1) return bracePos;
+  }
+
+  return -1;
+}
+
+function normalizeJsObjectLiteralToJson(jsLiteral) {
+  let out = '';
+  let inString = false;
+  let quote = '';
+  let escape = false;
+
+  for (let i = 0; i < jsLiteral.length; i += 1) {
+    const ch = jsLiteral[i];
+
+    if (!inString) {
+      if (ch === '"' || ch === "'" || ch === '`') {
+        inString = true;
+        quote = ch;
+        out += '"';
+        continue;
+      }
+      out += ch;
+      continue;
+    }
+
+    if (escape) {
+      out += jsonEscapeChar(ch);
+      escape = false;
+      continue;
+    }
+
+    if (ch === '\\') {
+      escape = true;
+      continue;
+    }
+
+    if (quote === '`' && ch === '$' && jsLiteral[i + 1] === '{') {
+      throw new Error('Template interpolation is not supported');
+    }
+
+    if (ch === quote) {
+      inString = false;
+      quote = '';
+      out += '"';
+      continue;
+    }
+
+    if (ch === '\n') {
+      out += '\\n';
+      continue;
+    }
+    if (ch === '\r') {
+      out += '\\r';
+      continue;
+    }
+    if (ch === '\t') {
+      out += '\\t';
+      continue;
+    }
+    if (ch === '"') {
+      out += '\\"';
+      continue;
+    }
+
+    out += ch;
+  }
+
+  if (inString || escape) {
+    throw new Error('Unterminated string in object literal');
+  }
+
+  const withoutTrailingCommas = out.replace(/,\s*([}\]])/g, '$1');
+  return withoutTrailingCommas.replace(/([{,]\s*)([A-Za-z_$][A-Za-z0-9_$]*|\d+)\s*:/g, '$1"$2":');
+}
+
+function jsonEscapeChar(ch) {
+  if (ch === '\n') return '\\n';
+  if (ch === '\r') return '\\r';
+  if (ch === '\t') return '\\t';
+  if (ch === '"') return '\\"';
+  if (ch === '\\') return '\\\\';
+  return `\\${ch}`;
 }
 
 function getMenuWeek(menuData, menu, week) {

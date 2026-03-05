@@ -1,0 +1,2 @@
+Worker smoke test target.
+Safe to update via POST /admin/update.
