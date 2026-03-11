@@ -1,30 +1,9 @@
 #!/usr/bin/env node
 
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
-
-const ROOT = path.resolve(__dirname, '..');
-
-function loadData(filePath, bindingName) {
-  const source = fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '');
-  const runtime = { module: { exports: {} }, exports: {} };
-  runtime.globalThis = runtime;
-  runtime.window = runtime;
-  runtime.self = runtime;
-  const ctx = vm.createContext(runtime);
-  vm.runInContext(source, ctx, { filename: path.basename(filePath) });
-
-  const fromWindow = ctx.window && ctx.window[bindingName];
-  const fromGlobal = ctx.globalThis && ctx.globalThis[bindingName];
-  const fromModule = ctx.module && ctx.module.exports && ctx.module.exports[bindingName];
-  const fromBinding = vm.runInContext(`typeof ${bindingName} !== "undefined" ? ${bindingName} : undefined`, ctx);
-
-  return fromWindow || fromGlobal || fromModule || fromBinding || null;
-}
+const { readRecipesJson } = require('./loadRecipesJson');
 
 function assertWeekShape(label, data) {
-  if (!data || typeof data !== 'object') {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new Error(`${label}: data missing or invalid`);
   }
 
@@ -55,15 +34,9 @@ function assertWeekShape(label, data) {
 }
 
 function main() {
-  const dinnerPath = path.join(ROOT, 'recipes.js');
-  const lunchPath = path.join(ROOT, 'recipeslunch.js');
-
-  const dinner = loadData(dinnerPath, 'recipesData');
-  const lunch = loadData(lunchPath, 'recipesLunchData');
-
-  assertWeekShape('Dinner', dinner);
-  assertWeekShape('Lunch', lunch);
-
+  const recipes = readRecipesJson();
+  assertWeekShape('Dinner', recipes.dinner);
+  assertWeekShape('Lunch', recipes.lunch);
   console.log('smoke:recipes OK');
 }
 

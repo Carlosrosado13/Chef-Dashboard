@@ -286,14 +286,15 @@ async function handleApply(request, env) {
     }, 200);
   }
 
-  const targetPath = menu === 'dinner' ? 'recipes.js' : 'recipeslunch.js';
+  const targetPath = 'frontend/data/recipes.json';
   const branch = env.GITHUB_BRANCH || 'main';
 
   const fileInfo = await githubGetFile(env, targetPath, branch);
-  const parsed = parseRecipeScript(fileInfo.content, menu);
+  const parsed = parseRecipeJsonFile(fileInfo.content);
+  const menuRecipes = ensureRecipeMenu(parsed.dataObject, menu);
 
   const applyResult = applyRecipeUpdate({
-    dataObject: parsed.dataObject,
+    dataObject: menuRecipes,
     week,
     day,
     dishSlotId,
@@ -309,8 +310,8 @@ async function handleApply(request, env) {
     return json({ ok: false, error: applyResult.error }, 422);
   }
 
-  const updatedFileContent = serializeRecipeScript(menu, parsed.dataObject, parsed.globalName);
-  const validateResult = validateRecipeScript(updatedFileContent, menu);
+  const updatedFileContent = serializeRecipeJsonFile(parsed.dataObject);
+  const validateResult = validateRecipeJsonFile(updatedFileContent, menu);
   if (!validateResult.ok) {
     return json({ ok: false, error: validateResult.error }, 422);
   }
@@ -908,6 +909,49 @@ function resolveFlatRecipeKey(weekData, candidates) {
   }
 
   return null;
+}
+
+function parseRecipeJsonFile(fileText) {
+  let dataObject;
+  try {
+    dataObject = JSON.parse(fileText);
+  } catch (_error) {
+    throw new Error('Could not parse frontend/data/recipes.json');
+  }
+
+  if (!dataObject || typeof dataObject !== 'object' || Array.isArray(dataObject)) {
+    throw new Error('frontend/data/recipes.json must contain an object');
+  }
+
+  return { dataObject };
+}
+
+function ensureRecipeMenu(dataObject, menu) {
+  if (!dataObject[menu] || typeof dataObject[menu] !== 'object' || Array.isArray(dataObject[menu])) {
+    dataObject[menu] = {};
+  }
+  return dataObject[menu];
+}
+
+function serializeRecipeJsonFile(dataObject) {
+  return `${JSON.stringify(dataObject, null, 2)}\n`;
+}
+
+function validateRecipeJsonFile(fileText, menu) {
+  try {
+    const parsed = parseRecipeJsonFile(fileText);
+    const menuRecipes = parsed.dataObject && parsed.dataObject[menu];
+    if (!menuRecipes || typeof menuRecipes !== 'object' || Array.isArray(menuRecipes)) {
+      return { ok: false, error: `recipes.json is missing ${menu} recipe data` };
+    }
+    const weekKeys = Object.keys(menuRecipes).filter((key) => /^\d+$/.test(String(key)));
+    if (!weekKeys.length) {
+      return { ok: false, error: `recipes.json has no valid ${menu} week keys` };
+    }
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error.message || String(error) };
+  }
 }
 
 function parseRecipeScript(fileText, menu) {

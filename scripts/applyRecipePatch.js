@@ -2,12 +2,10 @@
 
 const fs = require('fs');
 const path = require('path');
-const vm = require('vm');
 const { spawnSync } = require('child_process');
+const { readRecipesJson, RECIPES_JSON_PATH } = require('./loadRecipesJson');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
-const RECIPES_DINNER_FILE = path.join(ROOT_DIR, 'recipes.js');
-const RECIPES_LUNCH_FILE = path.join(ROOT_DIR, 'recipeslunch.js');
 const DINNER_MENU_SOURCE_FILE = path.join(ROOT_DIR, 'menu_overview.js');
 const DINNER_MENU_OVERRIDES_FILE = path.join(ROOT_DIR, 'dinner_menu_data.js');
 const LUNCH_MENU_SOURCE_FILE = path.join(ROOT_DIR, 'lunch_menu_data.js');
@@ -37,89 +35,6 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
-}
-
-function encodeTemplateLiteral(value) {
-  return String(value || '')
-    .replace(/\\/g, '\\\\')
-    .replace(/`/g, '\\`')
-    .replace(/\$\{/g, '\\${')
-    .replace(/\r?\n/g, '');
-}
-
-function encodeSingleQuotedJsString(value) {
-  return String(value || '')
-    .replace(/\\/g, '\\\\')
-    .replace(/'/g, "\\'")
-    .replace(/\r?\n/g, '')
-    .replace(/</g, '\\u003c')
-    .replace(/>/g, '\\u003e');
-}
-
-function parseJsStringOrTemplate(source, index) {
-  let i = index;
-  while (i < source.length && /\s/.test(source[i])) i += 1;
-
-  const quote = source[i];
-  if (!quote || !['"', "'", '`'].includes(quote)) return null;
-
-  const start = i;
-  i += 1;
-
-  while (i < source.length) {
-    const ch = source[i];
-    if (ch === '\\') {
-      i += 2;
-      continue;
-    }
-    if (quote === '`' && ch === '$' && source[i + 1] === '{') {
-      i += 2;
-      let depth = 1;
-      while (i < source.length && depth > 0) {
-        if (source[i] === '{') depth += 1;
-        else if (source[i] === '}') depth -= 1;
-        else if (source[i] === '\\') i += 1;
-        i += 1;
-      }
-      continue;
-    }
-    if (ch === quote) {
-      return { start, end: i + 1 };
-    }
-    i += 1;
-  }
-
-  return null;
-}
-
-function findMatchingBrace(source, openIndex) {
-  if (openIndex < 0 || source[openIndex] !== '{') return -1;
-
-  let depth = 0;
-  for (let i = openIndex; i < source.length; i += 1) {
-    const ch = source[i];
-    if (ch === '{') depth += 1;
-    else if (ch === '}') depth -= 1;
-    if (depth === 0) return i;
-  }
-  return -1;
-}
-
-function parseJsValueLiteral(source, index) {
-  let i = index;
-  while (i < source.length && /\s/.test(source[i])) i += 1;
-
-  const ch = source[i];
-  if (!ch) return null;
-  if (['"', "'", '`'].includes(ch)) return parseJsStringOrTemplate(source, i);
-
-  if (ch === '{') {
-    const end = findMatchingBrace(source, i);
-    if (end === -1) return null;
-    return { start: i, end: end + 1 };
-  }
-
-  return null;
 }
 
 function normalizeDay(day) {
@@ -220,25 +135,6 @@ function buildRecipeHtml(recipeData) {
   return `<h2>${title}</h2>${yieldRow}<h3>Ingredients</h3><table><thead><tr><th>Ingredient</th><th>Amount</th></tr></thead><tbody>${ingredientRows}</tbody></table><h3>Method</h3><ol type="1">${stepRows}</ol>`;
 }
 
-function loadInSandbox(source, filename) {
-  const runtime = { module: { exports: {} }, exports: {} };
-  runtime.globalThis = runtime;
-  runtime.window = runtime;
-  runtime.self = runtime;
-  const sandbox = vm.createContext(runtime);
-  vm.runInContext(source, sandbox, { filename });
-  return sandbox;
-}
-
-function getRecipeDataFromSandbox(menu, sandbox) {
-  if (menu === 'lunch') {
-    return (sandbox.module && sandbox.module.exports && sandbox.module.exports.recipesLunchData)
-      || sandbox.recipesLunchData
-      || sandbox.window.recipesLunchData;
-  }
-  return sandbox.recipesData || sandbox.window.recipesData;
-}
-
 function normalizeRecipeKey(value) {
   return String(value || '')
     .toLowerCase()
@@ -248,14 +144,8 @@ function normalizeRecipeKey(value) {
     .trim();
 }
 
-function resolveExistingRecipeKey({ source, menu, week, candidates }) {
-  const fileName = menu === 'lunch' ? 'recipeslunch.js' : 'recipes.js';
-  const sandbox = loadInSandbox(source, fileName);
-  const recipeData = getRecipeDataFromSandbox(menu, sandbox);
-  const weekData = recipeData && (recipeData[String(week)] || recipeData[week]);
-  if (!weekData || typeof weekData !== 'object') return '';
-
-  const keys = Object.keys(weekData);
+function resolveExistingRecipeKey(weekData, candidates) {
+  const keys = Object.keys(weekData || {});
   const cleanCandidates = candidates.map((s) => String(s || '').trim()).filter(Boolean);
 
   for (const candidate of cleanCandidates) {
@@ -277,30 +167,6 @@ function resolveExistingRecipeKey({ source, menu, week, candidates }) {
   }
 
   return '';
-}
-
-function replaceRecipeEntryInFile({ source, week, oldKey, newKey, replacementLiteral }) {
-  const weekPattern = new RegExp(`(?:'${week}'|"${week}"|${week})\\s*:\\s*\\{`, 'm');
-  const weekMatch = weekPattern.exec(source);
-  if (!weekMatch) throw new Error(`Week ${week} not found in recipe file`);
-
-  const weekStart = source.indexOf('{', weekMatch.index);
-  const weekEnd = findMatchingBrace(source, weekStart);
-  if (weekStart === -1 || weekEnd === -1) throw new Error(`Could not parse week block for week ${week}`);
-
-  const weekBlock = source.slice(weekStart, weekEnd + 1);
-  const keyPattern = new RegExp(`(['"])${escapeRegExp(oldKey)}\\1\\s*:\\s*`, 'm');
-  const keyMatch = keyPattern.exec(weekBlock);
-  if (!keyMatch) throw new Error(`Recipe key not found in week ${week}: ${oldKey}`);
-
-  const keyQuote = keyMatch[1];
-  const absKeyStart = weekStart + keyMatch.index;
-  const absValueStart = absKeyStart + keyMatch[0].length;
-  const parsed = parseJsValueLiteral(source, absValueStart);
-  if (!parsed) throw new Error(`Unable to parse existing recipe value for key ${oldKey}`);
-
-  const replacementEntry = `${keyQuote}${newKey}${keyQuote}: ${replacementLiteral}`;
-  return `${source.slice(0, absKeyStart)}${replacementEntry}${source.slice(parsed.end)}`;
 }
 
 function replaceMenuSlotValue({ source, weekKey, dayKey, slotKey, newTitle }) {
@@ -327,16 +193,24 @@ function updateDinnerOverrideIfPresent(source, week, day, slotKey, newTitle) {
   return source;
 }
 
-function validateUpdatedRecipeSource(menu, source, week, key) {
-  const filename = menu === 'lunch' ? 'recipeslunch.js' : 'recipes.js';
-  const sandbox = loadInSandbox(source, filename);
-  const recipeData = getRecipeDataFromSandbox(menu, sandbox);
-  if (!recipeData || typeof recipeData !== 'object') throw new Error(`${filename} missing expected recipe data after patch.`);
+function validateUpdatedRecipeData(recipes, menu, week, key) {
+  const menuRecipes = recipes[menu];
+  if (!menuRecipes || typeof menuRecipes !== 'object' || Array.isArray(menuRecipes)) {
+    throw new Error(`recipes.json missing ${menu} recipe data after patch.`);
+  }
 
-  const weekData = recipeData[String(week)] || recipeData[week];
-  if (!weekData || typeof weekData !== 'object') throw new Error(`${filename} week ${week} missing after patch.`);
-  if (!Object.prototype.hasOwnProperty.call(weekData, key)) throw new Error(`${filename} updated key "${key}" missing after patch.`);
-  if (typeof weekData[key] !== 'string') throw new Error(`${filename} updated key "${key}" is not a string after patch.`);
+  const weekData = menuRecipes[String(week)] || menuRecipes[week];
+  if (!weekData || typeof weekData !== 'object' || Array.isArray(weekData)) {
+    throw new Error(`recipes.json week ${week} missing after patch.`);
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(weekData, key)) {
+    throw new Error(`recipes.json updated key "${key}" missing after patch.`);
+  }
+
+  if (typeof weekData[key] !== 'string') {
+    throw new Error(`recipes.json updated key "${key}" is not a string after patch.`);
+  }
 }
 
 function runGlobalValidator() {
@@ -344,6 +218,14 @@ function runGlobalValidator() {
   const result = spawnSync(process.execPath, [validatorPath], { cwd: ROOT_DIR, encoding: 'utf8' });
   if (result.status !== 0) {
     throw new Error(`validateRecipesData failed:\n${(result.stderr || result.stdout || '').trim()}`);
+  }
+}
+
+function rebuildIngredientIndex() {
+  const generatorPath = path.join(ROOT_DIR, 'scripts', 'generate_master_ingredients.js');
+  const result = spawnSync(process.execPath, [generatorPath, '--js-only'], { cwd: ROOT_DIR, encoding: 'utf8' });
+  if (result.status !== 0) {
+    throw new Error(`generate_master_ingredients failed:\n${(result.stderr || result.stdout || '').trim()}`);
   }
 }
 
@@ -362,36 +244,21 @@ function main() {
   }
 
   const patch = validatePatch(patchJson);
+  const recipes = readRecipesJson().all;
+  const menuRecipes = recipes[patch.menu] && typeof recipes[patch.menu] === 'object' && !Array.isArray(recipes[patch.menu])
+    ? recipes[patch.menu]
+    : (recipes[patch.menu] = {});
+  const weekKey = String(patch.week);
+  const weekRecipes = menuRecipes[weekKey] && typeof menuRecipes[weekKey] === 'object' && !Array.isArray(menuRecipes[weekKey])
+    ? menuRecipes[weekKey]
+    : (menuRecipes[weekKey] = {});
+
   const oldKeyCandidates = [patch.oldRecipeKey, patch.oldDishName, patch.recipeData.title].filter(Boolean);
-  if (!oldKeyCandidates.length) throw new Error('Patch must include oldRecipeKey or oldDishName');
+  const oldKey = resolveExistingRecipeKey(weekRecipes, oldKeyCandidates);
+  weekRecipes[patch.recipeData.title] = buildRecipeHtml(patch.recipeData);
+  validateUpdatedRecipeData(recipes, patch.menu, patch.week, patch.recipeData.title);
 
-  const recipeFile = patch.menu === 'lunch' ? RECIPES_LUNCH_FILE : RECIPES_DINNER_FILE;
-  const recipeSource = readUtf8(recipeFile);
-  const oldKey = resolveExistingRecipeKey({
-    source: recipeSource,
-    menu: patch.menu,
-    week: patch.week,
-    candidates: oldKeyCandidates,
-  });
-  if (!oldKey) throw new Error(`Recipe key not found in week ${patch.week} for candidates: ${oldKeyCandidates.join(' | ')}`);
-
-  const html = buildRecipeHtml(patch.recipeData);
-  const replacementLiteral = patch.menu === 'lunch'
-    ? `'${encodeSingleQuotedJsString(html)}'`
-    : `\`${encodeTemplateLiteral(html)}\``;
-
-  const updatedRecipeSource = replaceRecipeEntryInFile({
-    source: recipeSource,
-    week: patch.week,
-    oldKey,
-    newKey: patch.recipeData.title,
-    replacementLiteral,
-  });
-  if (updatedRecipeSource === recipeSource) throw new Error('Recipe file did not change; aborting.');
-
-  validateUpdatedRecipeSource(patch.menu, updatedRecipeSource, patch.week, patch.recipeData.title);
-
-  const writes = [{ filePath: recipeFile, content: updatedRecipeSource }];
+  const writes = [{ filePath: RECIPES_JSON_PATH, content: `${JSON.stringify(recipes, null, 2)}\n` }];
 
   if (patch.menu === 'lunch') {
     const lunchSource = readUtf8(LUNCH_MENU_SOURCE_FILE);
@@ -426,11 +293,13 @@ function main() {
   }
 
   writes.forEach(({ filePath, content }) => writeUtf8(filePath, content));
+  rebuildIngredientIndex();
   runGlobalValidator();
 
   console.log(`Applied patch: ${patch.menu} week ${patch.week} ${patch.day} ${patch.dishSlotKey}`);
-  console.log(`Changed title: ${oldKey} -> ${patch.recipeData.title}`);
-  console.log(`Updated recipe file: ${path.relative(ROOT_DIR, recipeFile)}`);
+  console.log(`Matched existing title: ${oldKey || '(none)'}`);
+  console.log(`Appended/updated title: ${patch.recipeData.title}`);
+  console.log(`Updated recipe file: ${path.relative(ROOT_DIR, RECIPES_JSON_PATH)}`);
   console.log('Done. Next: git add/commit/push and hard refresh site.');
 }
 
@@ -440,4 +309,3 @@ try {
   console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
 }
-

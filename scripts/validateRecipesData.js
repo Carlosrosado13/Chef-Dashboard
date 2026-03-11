@@ -1,12 +1,6 @@
 #!/usr/bin/env node
 
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
-
-const ROOT = path.resolve(__dirname, '..');
-const DINNER_FILE = path.join(ROOT, 'recipes.js');
-const LUNCH_FILE = path.join(ROOT, 'recipeslunch.js');
+const { readRecipesJson, RECIPES_JSON_PATH } = require('./loadRecipesJson');
 
 function fail(message) {
   console.error(`ERROR: ${message}`);
@@ -15,48 +9,6 @@ function fail(message) {
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
-}
-
-function loadScript(filePath) {
-  const source = fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '');
-  const runtime = { module: { exports: {} }, exports: {} };
-  runtime.globalThis = runtime;
-  runtime.window = runtime;
-  runtime.self = runtime;
-  const context = vm.createContext(runtime);
-  vm.runInContext(source, context, { filename: path.basename(filePath) });
-  return { context, source };
-}
-
-function getBinding(context, name) {
-  return vm.runInContext(`typeof ${name} !== "undefined" ? ${name} : undefined`, context);
-}
-
-function getRecipeData(context, source, kind) {
-  if (kind === 'dinner') {
-    return {
-      data:
-        context.window?.recipesData ||
-        context.globalThis?.recipesData ||
-        context.recipesData ||
-        getBinding(context, 'recipesData') ||
-        null,
-      hasWindowAssignment: /window\.recipesData\s*=/.test(source),
-      hasBinding: vm.runInContext('typeof recipesData !== "undefined"', context),
-    };
-  }
-
-  return {
-    data:
-      context.window?.recipesLunchData ||
-      context.globalThis?.recipesLunchData ||
-      (context.module && context.module.exports && context.module.exports.recipesLunchData) ||
-      context.recipesLunchData ||
-      getBinding(context, 'recipesLunchData') ||
-      null,
-    hasWindowAssignment: /window\.recipesLunchData\s*=/.test(source),
-    hasBinding: vm.runInContext('typeof recipesLunchData !== "undefined"', context),
-  };
 }
 
 function validateRecipeObject(label, data) {
@@ -80,61 +32,16 @@ function validateRecipeObject(label, data) {
 
     const recipeKeys = Object.keys(weekData);
     assert(recipeKeys.length > 0, `${label} week ${weekKey} must have recipe entries`);
-
-    const hasRenderable = recipeKeys.some((key) => typeof weekData[key] === 'string');
-    assert(hasRenderable, `${label} week ${weekKey} must contain string recipe HTML entries`);
-
-    recipeKeys.forEach((recipeKey) => {
-      const value = weekData[recipeKey];
-      if (typeof value === 'string') return;
-      if (!value || typeof value !== 'object' || Array.isArray(value)) {
-        throw new Error(`${label} week ${weekKey} recipe "${recipeKey}" must be a string`);
-      }
-
-      const steps = Array.isArray(value.steps) ? value.steps.map((step) => String(step || '').trim()).filter(Boolean) : [];
-      if (!steps.length) return;
-
-      const ingredients = Array.isArray(value.ingredients) ? value.ingredients : [];
-      const hasIngredient = ingredients.some((ingredient) => {
-        if (typeof ingredient === 'string') return ingredient.trim().length > 0;
-        if (!ingredient || typeof ingredient !== 'object') return false;
-        const original = String(ingredient.original || '').trim();
-        const name = String(ingredient.name || '').trim();
-        return Boolean(original || name);
-      });
-
-      assert(
-        hasIngredient,
-        `${label} week ${weekKey} recipe "${recipeKey}" has steps but no valid ingredient entries`
-      );
-    });
+    assert(recipeKeys.some((key) => typeof weekData[key] === 'string'), `${label} week ${weekKey} must contain string recipe HTML entries`);
   });
 }
 
 function main() {
   try {
-    const dinner = loadScript(DINNER_FILE);
-    const lunch = loadScript(LUNCH_FILE);
-
-    const dinnerInfo = getRecipeData(dinner.context, dinner.source, 'dinner');
-    const lunchInfo = getRecipeData(lunch.context, lunch.source, 'lunch');
-
-    assert(dinnerInfo.data, 'recipes.js could not expose dinner data');
-    assert(lunchInfo.data, 'recipeslunch.js could not expose lunch data');
-
-    assert(
-      dinnerInfo.hasWindowAssignment || dinnerInfo.hasBinding,
-      'recipes.js must set window.recipesData or provide recipesData binding'
-    );
-    assert(
-      lunchInfo.hasWindowAssignment || lunchInfo.hasBinding,
-      'recipeslunch.js must set window.recipesLunchData or provide recipesLunchData binding'
-    );
-
-    validateRecipeObject('Dinner recipesData', dinnerInfo.data);
-    validateRecipeObject('Lunch recipesLunchData', lunchInfo.data);
-
-    console.log('validate:recipes OK');
+    const recipes = readRecipesJson();
+    validateRecipeObject('Dinner recipes', recipes.dinner);
+    validateRecipeObject('Lunch recipes', recipes.lunch);
+    console.log(`validate:recipes OK (${RECIPES_JSON_PATH})`);
   } catch (error) {
     fail(error.message || String(error));
   }

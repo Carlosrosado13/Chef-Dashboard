@@ -22,6 +22,20 @@ const DAY_ALIASES = {
   sunday: ['Sunday', 'Sun'],
 };
 
+const INGREDIENT_RULES = [
+  { category: 'Protein', keywords: ['chicken', 'beef', 'pork', 'shrimp', 'salmon', 'fish', 'lamb', 'turkey', 'sausage', 'egg'] },
+  { category: 'Dairy', keywords: ['milk', 'cream', 'cheese', 'butter', 'yogurt', 'parmesan', 'feta', 'mozzarella'] },
+  { category: 'Greens', keywords: ['lettuce', 'arugula', 'spinach', 'kale', 'romaine', 'mixed greens'] },
+  { category: 'Vegetable', keywords: ['onion', 'garlic', 'carrot', 'zucchini', 'tomato', 'pepper', 'mushroom', 'potato', 'eggplant'] },
+  { category: 'Fruit', keywords: ['apple', 'berry', 'lemon', 'orange', 'mango', 'banana'] },
+  { category: 'Starch', keywords: ['rice', 'pasta', 'bread', 'flour', 'polenta', 'gnocchi'] },
+  { category: 'Dry', keywords: ['flour', 'cornstarch', 'cornmeal', 'sugar', 'cocoa'] },
+  { category: 'Spices', keywords: ['salt', 'pepper', 'paprika', 'cumin', 'chili', 'thyme', 'rosemary'] },
+  { category: 'Alcohol', keywords: ['wine', 'brandy', 'beer'] },
+  { category: 'Can', keywords: ['canned', 'tomato paste', 'canned beans'] },
+  { category: 'Frozen', keywords: ['frozen'] },
+];
+
 export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
@@ -200,15 +214,14 @@ async function handleApply(request, env) {
 
   const branch = env.GH_BRANCH;
   const menuPath = menu === 'dinner' ? 'menu_overview.js' : 'lunch_menu_data.js';
-  const recipePath = menu === 'dinner' ? 'recipes.js' : 'recipeslunch.js';
+  const recipePath = 'frontend/data/recipes.json';
 
   const menuFile = await githubGetFile(env, menuPath, branch);
   const recipeFile = await githubGetFile(env, recipePath, branch);
 
   const menuVar = menu === 'dinner' ? 'menuOverviewData' : 'lunchMenuData';
-  const recipeVar = menu === 'dinner' ? 'recipesData' : 'recipesLunchData';
   const menuData = parseDataScript(menuFile.content, menuVar);
-  const recipeData = parseDataScript(recipeFile.content, recipeVar);
+  const recipeData = parseRecipeJsonFile(recipeFile.content);
 
   const weekMenuData = getMenuWeek(menuData, menu, week);
   if (!weekMenuData) {
@@ -230,27 +243,21 @@ async function handleApply(request, env) {
   const menuDishBefore = sanitizeText(dayMenu[resolvedSlotKey] || '');
   dayMenu[resolvedSlotKey] = newDishName;
 
-  const weekRecipes = recipeData[String(week)] || recipeData[week];
-  if (!weekRecipes || typeof weekRecipes !== 'object') {
-    return json({ ok: false, error: `Week ${week} not found in ${recipePath}` }, 400);
-  }
+  const menuRecipes = ensureRecipeMenu(recipeData, menu);
+  const weekKey = String(week);
+  const weekRecipes = ensureRecipeWeek(menuRecipes, weekKey);
 
   const recipeKeyBefore = resolveRecipeKey(weekRecipes, [oldDishName, menuDishBefore, newDishName]);
-  if (!recipeKeyBefore) {
-    return json({
-      ok: false,
-      error: `Could not find recipe entry in ${recipePath} for oldDishName="${oldDishName}"`,
-      candidatesChecked: [oldDishName, menuDishBefore, newDishName],
-    }, 400);
-  }
-
-  if (recipeKeyBefore !== newDishName) {
-    delete weekRecipes[recipeKeyBefore];
-  }
   weekRecipes[newDishName] = newRecipeHtml;
 
   const menuScript = serializeMenuScript(menu, menuData);
-  const recipeScript = serializeRecipeScript(menu, recipeData);
+  const recipeScript = serializeRecipeJsonFile(recipeData);
+  const recipeValidation = validateRecipeJson(recipeData);
+  if (!recipeValidation.ok) {
+    return json({ ok: false, error: recipeValidation.error }, 422);
+  }
+  const ingredientIndexPath = 'data/master_ingredients.js';
+  const ingredientIndexScript = buildMasterIngredientsJs(recipeData);
   const isDryRun = new URL(request.url).searchParams.get('dryRun') === 'true';
 
   if (isDryRun) {
@@ -268,26 +275,23 @@ async function handleApply(request, env) {
       },
       recipeUpdate: {
         week,
-        beforeKey: recipeKeyBefore,
+        matchedExistingKey: recipeKeyBefore || null,
         afterKey: newDishName,
+        appended: recipeKeyBefore !== newDishName,
       },
+      derivedUpdates: [recipePath, ingredientIndexPath, menuPath],
     }, 200);
   }
 
-  const recipeCommit = await githubUpdateFile(env, {
-    path: recipePath,
+  const commitMessage = `Update recipe pipeline: ${menu} W${week} ${dayKey} ${resolvedSlotKey}`;
+  const commit = await githubCommitFilesAtomically(env, {
     branch,
-    message: `Update recipe HTML: ${menu} W${week} ${dayKey} ${resolvedSlotKey}`,
-    content: recipeScript,
-    sha: recipeFile.sha,
-  });
-
-  const menuCommit = await githubUpdateFile(env, {
-    path: menuPath,
-    branch,
-    message: `Update menu slot title: ${menu} W${week} ${dayKey} ${resolvedSlotKey}`,
-    content: menuScript,
-    sha: menuFile.sha,
+    message: commitMessage,
+    files: [
+      { path: recipePath, content: recipeScript },
+      { path: ingredientIndexPath, content: ingredientIndexScript },
+      { path: menuPath, content: menuScript },
+    ],
   });
 
   return json({
@@ -295,10 +299,13 @@ async function handleApply(request, env) {
     status: 'updated',
     menuPath,
     recipePath,
-    menuCommitSha: menuCommit.commit?.sha || null,
-    recipeCommitSha: recipeCommit.commit?.sha || null,
-    recipeCommitUrl: recipeCommit.commit?.html_url || null,
-    menuCommitUrl: menuCommit.commit?.html_url || null,
+    ingredientIndexPath,
+    commitSha: commit.commitSha || null,
+    commitUrl: commit.commitUrl || null,
+    menuCommitSha: commit.commitSha || null,
+    recipeCommitSha: commit.commitSha || null,
+    recipeCommitUrl: commit.commitUrl || null,
+    menuCommitUrl: commit.commitUrl || null,
   }, 200);
 }
 
@@ -390,6 +397,146 @@ function findMatchingBrace(text, openBraceIndex) {
 
 function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function parseRecipeJsonFile(fileText) {
+  let parsed;
+  try {
+    parsed = JSON.parse(fileText);
+  } catch (_error) {
+    throw createError(400, 'Could not parse frontend/data/recipes.json');
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw createError(400, 'frontend/data/recipes.json must contain an object');
+  }
+
+  return parsed;
+}
+
+function ensureRecipeMenu(recipeData, menu) {
+  if (!recipeData[menu] || typeof recipeData[menu] !== 'object' || Array.isArray(recipeData[menu])) {
+    recipeData[menu] = {};
+  }
+  return recipeData[menu];
+}
+
+function ensureRecipeWeek(menuRecipes, weekKey) {
+  if (!menuRecipes[weekKey] || typeof menuRecipes[weekKey] !== 'object' || Array.isArray(menuRecipes[weekKey])) {
+    menuRecipes[weekKey] = {};
+  }
+  return menuRecipes[weekKey];
+}
+
+function serializeRecipeJsonFile(recipeData) {
+  return `${JSON.stringify(recipeData, null, 2)}\n`;
+}
+
+function validateRecipeJson(recipeData) {
+  if (!recipeData || typeof recipeData !== 'object' || Array.isArray(recipeData)) {
+    return { ok: false, error: 'recipes.json must be a top-level object' };
+  }
+
+  for (const menu of ['dinner', 'lunch']) {
+    const menuRecipes = recipeData[menu];
+    if (!menuRecipes || typeof menuRecipes !== 'object' || Array.isArray(menuRecipes)) {
+      return { ok: false, error: `recipes.json is missing ${menu} recipe data` };
+    }
+
+    const weekKeys = Object.keys(menuRecipes).filter((key) => /^\d+$/.test(String(key)));
+    if (!weekKeys.length) {
+      return { ok: false, error: `recipes.json has no valid ${menu} week keys` };
+    }
+
+    for (const weekKey of weekKeys) {
+      const weekRecipes = menuRecipes[weekKey];
+      if (!weekRecipes || typeof weekRecipes !== 'object' || Array.isArray(weekRecipes)) {
+        return { ok: false, error: `recipes.json ${menu} week ${weekKey} must be an object` };
+      }
+
+      for (const recipeKey of Object.keys(weekRecipes)) {
+        if (typeof weekRecipes[recipeKey] !== 'string') {
+          return { ok: false, error: `recipes.json ${menu} week ${weekKey} recipe "${recipeKey}" must be a string` };
+        }
+      }
+    }
+  }
+
+  return { ok: true };
+}
+
+function buildMasterIngredientsJs(recipeData) {
+  const allRecipeHtml = [
+    ...getRecipeHtmlStrings(recipeData?.dinner),
+    ...getRecipeHtmlStrings(recipeData?.lunch),
+  ];
+
+  const deduped = new Map();
+  for (const recipeHtml of allRecipeHtml) {
+    const ingredients = extractIngredientsFromHtml(recipeHtml);
+    for (const ingredient of ingredients) {
+      const key = ingredient.toLowerCase();
+      if (!deduped.has(key)) {
+        deduped.set(key, ingredient);
+      }
+    }
+  }
+
+  const entries = Array.from(deduped.values())
+    .sort((a, b) => a.localeCompare(b))
+    .map((name) => ({ name, category: classifyIngredient(name) }));
+
+  const lines = ['const masterIngredients = ['];
+  for (const entry of entries) {
+    const name = entry.name.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const category = entry.category.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    lines.push(`  { name: "${name}", category: "${category}" },`);
+  }
+  lines.push('];', '', 'export default masterIngredients;', '');
+  return lines.join('\n');
+}
+
+function getRecipeHtmlStrings(dataset) {
+  const htmlStrings = [];
+  if (!dataset || typeof dataset !== 'object') return htmlStrings;
+
+  for (const weekRecipes of Object.values(dataset)) {
+    if (!weekRecipes || typeof weekRecipes !== 'object') continue;
+    for (const recipeHtml of Object.values(weekRecipes)) {
+      if (typeof recipeHtml === 'string') htmlStrings.push(recipeHtml);
+    }
+  }
+
+  return htmlStrings;
+}
+
+function extractIngredientsFromHtml(recipeHtml) {
+  const ingredients = [];
+  const tbodyMatches = String(recipeHtml || '').match(/<tbody[\s\S]*?<\/tbody>/gi) || [];
+
+  for (const tbody of tbodyMatches) {
+    const trMatches = tbody.match(/<tr[\s\S]*?<\/tr>/gi) || [];
+    for (const tr of trMatches) {
+      const firstTdMatch = tr.match(/<td\b[^>]*>([\s\S]*?)<\/td>/i);
+      if (!firstTdMatch) continue;
+      const ingredient = sanitizeText(firstTdMatch[1]);
+      if (!ingredient) continue;
+      if (ingredient.toLowerCase() === 'ingredient') continue;
+      ingredients.push(ingredient);
+    }
+  }
+
+  return ingredients;
+}
+
+function classifyIngredient(ingredient) {
+  const lower = String(ingredient || '').toLowerCase();
+  for (const rule of INGREDIENT_RULES) {
+    for (const keyword of rule.keywords) {
+      if (lower.includes(keyword)) return rule.category;
+    }
+  }
+  return 'Uncategorized';
 }
 
 function findObjectAssignmentStart(scriptText, varName) {
@@ -915,6 +1062,63 @@ async function getGithubFileSha(env, { owner, repo, path, branch }) {
     if (Number(error?.status) === 404) return null;
     throw error;
   }
+}
+
+async function githubCommitFilesAtomically(env, { branch, message, files }) {
+  const owner = env.GH_OWNER;
+  const repo = env.GH_REPO;
+  const refName = `heads/${branch}`;
+  const refEndpoint = `https://api.github.com/repos/${owner}/${repo}/git/ref/${refName}`;
+  const refData = await githubApi(env, 'GET', refEndpoint);
+  const parentSha = refData?.object?.sha;
+  if (!parentSha) {
+    throw createError(500, `Could not resolve git ref for branch ${branch}`);
+  }
+
+  const commitEndpoint = `https://api.github.com/repos/${owner}/${repo}/git/commits/${parentSha}`;
+  const parentCommit = await githubApi(env, 'GET', commitEndpoint);
+  const baseTreeSha = parentCommit?.tree?.sha;
+  if (!baseTreeSha) {
+    throw createError(500, `Could not resolve base tree for branch ${branch}`);
+  }
+
+  const treeEndpoint = `https://api.github.com/repos/${owner}/${repo}/git/trees`;
+  const treeData = await githubApi(env, 'POST', treeEndpoint, {
+    base_tree: baseTreeSha,
+    tree: files.map((file) => ({
+      path: file.path,
+      mode: '100644',
+      type: 'blob',
+      content: file.content,
+    })),
+  });
+
+  const newTreeSha = treeData?.sha;
+  if (!newTreeSha) {
+    throw createError(500, 'Could not create git tree for recipe update');
+  }
+
+  const createCommitEndpoint = `https://api.github.com/repos/${owner}/${repo}/git/commits`;
+  const createdCommit = await githubApi(env, 'POST', createCommitEndpoint, {
+    message,
+    tree: newTreeSha,
+    parents: [parentSha],
+  });
+
+  const newCommitSha = createdCommit?.sha;
+  if (!newCommitSha) {
+    throw createError(500, 'Could not create git commit for recipe update');
+  }
+
+  await githubApi(env, 'PATCH', refEndpoint, {
+    sha: newCommitSha,
+    force: false,
+  });
+
+  return {
+    commitSha: newCommitSha,
+    commitUrl: createdCommit?.html_url || `https://github.com/${owner}/${repo}/commit/${newCommitSha}`,
+  };
 }
 
 async function upsertGithubFile(env, { owner, repo, path, branch, contentText, message }) {

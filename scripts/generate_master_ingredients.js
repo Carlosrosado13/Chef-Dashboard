@@ -2,12 +2,10 @@
 
 const fs = require('fs');
 const path = require('path');
-const vm = require('vm');
 const ExcelJS = require('exceljs');
+const { readRecipesJson } = require('./loadRecipesJson');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
-const RECIPES_DINNER_PATH = path.join(ROOT_DIR, 'recipes.js');
-const RECIPES_LUNCH_PATH = path.join(ROOT_DIR, 'recipeslunch.js');
 const MASTER_INGREDIENTS_JS_PATH = path.join(ROOT_DIR, 'data', 'master_ingredients.js');
 const MASTER_INGREDIENTS_XLSX_PATH = path.join(ROOT_DIR, 'ingredients_master.xlsx');
 
@@ -46,15 +44,6 @@ function cleanText(value) {
     .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-}
-
-function evalScriptInSandbox(filePath, sandbox) {
-  let code = fs.readFileSync(filePath, 'utf8');
-  code = code.replace(/^\uFEFF/, '');
-  code = code.replace(/\bexport\s+const\s+/g, 'const ');
-  code = code.replace(/\bexport\s+default\s+/g, '');
-
-  vm.runInContext(code, sandbox, { filename: path.basename(filePath) });
 }
 
 function getRecipeHtmlStrings(dataset) {
@@ -148,25 +137,10 @@ async function writeExcel(entries) {
 }
 
 async function main() {
-  const runtime = { module: { exports: {} }, exports: {} };
-  runtime.globalThis = runtime;
-  runtime.window = runtime;
-  runtime.self = runtime;
-  const sandbox = vm.createContext(runtime);
-
-  evalScriptInSandbox(RECIPES_DINNER_PATH, sandbox);
-  evalScriptInSandbox(RECIPES_LUNCH_PATH, sandbox);
-
-  const dinnerData = runtime.recipesData;
-  const lunchData = runtime.recipesDataLunch || runtime.recipesLunchData;
-
-  if (!dinnerData) {
-    throw new Error('recipes.js did not populate globalThis.recipesData');
-  }
-
-  if (!lunchData) {
-    throw new Error('recipeslunch.js did not populate globalThis.recipesDataLunch or globalThis.recipesLunchData');
-  }
+  const jsOnly = process.argv.includes('--js-only');
+  const recipes = readRecipesJson();
+  const dinnerData = recipes.dinner;
+  const lunchData = recipes.lunch;
 
   const allRecipeHtml = [
     ...getRecipeHtmlStrings(dinnerData),
@@ -193,12 +167,16 @@ async function main() {
   fs.mkdirSync(path.dirname(MASTER_INGREDIENTS_JS_PATH), { recursive: true });
   fs.writeFileSync(MASTER_INGREDIENTS_JS_PATH, buildMasterIngredientsJs(entries), 'utf8');
 
-  await writeExcel(entries);
+  if (!jsOnly) {
+    await writeExcel(entries);
+  }
 
   console.log(`Total extracted: ${extractedIngredients.length}`);
   console.log(`Unique ingredients: ${entries.length}`);
   console.log(`JS output: ${MASTER_INGREDIENTS_JS_PATH}`);
-  console.log(`XLSX output: ${MASTER_INGREDIENTS_XLSX_PATH}`);
+  if (!jsOnly) {
+    console.log(`XLSX output: ${MASTER_INGREDIENTS_XLSX_PATH}`);
+  }
 }
 
 main().catch((error) => {
