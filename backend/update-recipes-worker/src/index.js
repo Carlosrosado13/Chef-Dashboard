@@ -208,7 +208,12 @@ async function handleApply(request, env) {
   const menuVar = menu === 'dinner' ? 'menuOverviewData' : 'lunchMenuData';
   const recipeVar = menu === 'dinner' ? 'recipesData' : 'recipesLunchData';
   const menuData = parseDataScript(menuFile.content, menuVar);
-  const recipeData = parseDataScript(recipeFile.content, recipeVar);
+  let recipeData;
+  try {
+    recipeData = parseRecipeScript(recipeFile.content, menu).dataObject;
+  } catch (error) {
+    throw createError(400, `Could not parse ${recipeVar} from ${recipePath}: ${error.message || String(error)}`);
+  }
 
   const weekMenuData = getMenuWeek(menuData, menu, week);
   if (!weekMenuData) {
@@ -239,7 +244,7 @@ async function handleApply(request, env) {
 
   const menuScript = serializeMenuScript(menu, menuData);
   const recipeScript = updateObjectAssignmentInScript(recipeFile.content, recipeVar, recipeData);
-  const recipeValidation = validateRecipeScript(recipeScript, recipeVar);
+  const recipeValidation = validateRecipeScript(recipeScript, menu);
   if (!recipeValidation.ok) {
     return json({ ok: false, error: recipeValidation.error }, 422);
   }
@@ -404,21 +409,6 @@ function updateObjectAssignmentInScript(scriptText, varName, value) {
   return `${scriptText.slice(0, startIndex)}${replacement}${scriptText.slice(endIndex + 1)}`;
 }
 
-function validateRecipeScript(scriptText, varName) {
-  const syntax = validateScriptSyntax(scriptText, `${varName}.js`);
-  if (!syntax.ok) return syntax;
-
-  try {
-    const data = parseDataScript(scriptText, varName);
-    if (!data || typeof data !== 'object') {
-      return { ok: false, error: `${varName} did not evaluate to an object` };
-    }
-    return { ok: true };
-  } catch (error) {
-    return { ok: false, error: error.message || String(error) };
-  }
-}
-
 function validateScriptSyntax(scriptText, label) {
   try {
     new Function(scriptText);
@@ -448,6 +438,70 @@ function findObjectAssignmentStart(scriptText, varName) {
   }
 
   return -1;
+}
+
+function parseRecipeScript(fileText, menu) {
+  const expectedGlobal = menu === 'dinner' ? 'recipesData' : 'recipesLunchData';
+  const label = menu === 'dinner' ? 'recipes.js' : 'recipeslunch.js';
+  const syntax = validateScriptSyntax(fileText, label);
+  if (!syntax.ok) {
+    throw new Error(syntax.error);
+  }
+
+  const evaluated = evaluateRecipeScript(fileText, label);
+  const dataObject =
+    evaluated.runtime?.window?.[expectedGlobal] ||
+    evaluated.runtime?.globalThis?.[expectedGlobal] ||
+    evaluated.locals?.[expectedGlobal] ||
+    null;
+
+  if (!dataObject || typeof dataObject !== 'object' || Array.isArray(dataObject)) {
+    throw new Error(`${expectedGlobal} is missing or is not an object in ${label}`);
+  }
+
+  return { dataObject };
+}
+
+function evaluateRecipeScript(scriptText, label) {
+  const runtime = { window: {}, globalThis: {}, self: {}, module: { exports: {} }, exports: {} };
+  runtime.globalThis = runtime;
+  runtime.window = runtime;
+  runtime.self = runtime;
+
+  try {
+    const fn = new Function(
+      'window',
+      'globalThis',
+      'self',
+      'module',
+      'exports',
+      `${scriptText}
+return {
+  recipesData: typeof recipesData !== 'undefined' ? recipesData : undefined,
+  recipesLunchData: typeof recipesLunchData !== 'undefined' ? recipesLunchData : undefined,
+};`
+    );
+
+    const locals = fn(runtime, runtime, runtime, runtime.module, runtime.exports) || {};
+    return { runtime, locals };
+  } catch (error) {
+    throw new Error(`Unable to evaluate ${label}: ${error.message || String(error)}`);
+  }
+}
+
+function validateRecipeScript(scriptText, menu) {
+  const expectedGlobal = menu === 'dinner' ? 'recipesData' : 'recipesLunchData';
+  const label = menu === 'dinner' ? 'recipes.js' : 'recipeslunch.js';
+
+  try {
+    const parsed = parseRecipeScript(scriptText, menu);
+    if (!Object.keys(parsed.dataObject || {}).length) {
+      return { ok: false, error: `${expectedGlobal} is empty in ${label}` };
+    }
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error.message || String(error) };
+  }
 }
 
 function normalizeJsObjectLiteralToJson(jsLiteral) {
