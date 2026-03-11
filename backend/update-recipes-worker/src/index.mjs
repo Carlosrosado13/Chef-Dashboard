@@ -309,7 +309,7 @@ async function handleApply(request, env) {
     return json({ ok: false, error: applyResult.error }, 422);
   }
 
-  const updatedFileContent = `window.${parsed.globalName} = ${JSON.stringify(parsed.dataObject, null, 2)};\n`;
+  const updatedFileContent = serializeRecipeScript(menu, parsed.dataObject, parsed.globalName);
   const validateResult = validateRecipeScript(updatedFileContent, menu);
   if (!validateResult.ok) {
     return json({ ok: false, error: validateResult.error }, 422);
@@ -932,6 +932,31 @@ function detectGlobalName(fileText, fallback) {
   const match = fileText.match(/window\.(recipesData|recipesLunchData)\s*=/);
   if (match && match[1]) return match[1];
   return fallback;
+}
+
+function serializeRecipeScript(menu, dataObject, globalName) {
+  const bindingName = menu === 'dinner' ? 'recipesData' : 'recipesLunchData';
+  const exposedGlobal = globalName || bindingName;
+  const lines = [`const ${bindingName} = ${JSON.stringify(dataObject, null, 2)};`, ''];
+
+  lines.push(
+    "if (typeof module !== 'undefined' && module.exports) {",
+    `  module.exports = { ${bindingName} };`,
+    '}',
+    ''
+  );
+
+  lines.push(
+    "if (typeof window !== 'undefined') {",
+    `  window.${exposedGlobal} = ${bindingName};`,
+    '}',
+    "if (typeof globalThis !== 'undefined') {",
+    `  globalThis.${exposedGlobal} = ${bindingName};`,
+    '}',
+    ''
+  );
+
+  return lines.join('\n');
 }
 
 function evaluateScript(scriptText) {

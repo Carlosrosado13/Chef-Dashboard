@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 const recipesData = {
   '1': {
     'Hot Appetizer: Crispy Prosciutto-Wrapped Mozzarella with Spicy Tomato Fondue': `<h2>Hot Appetizer: Crispy Prosciutto-Wrapped Mozzarella with Spicy Tomato Fondue</h2><h3>Ingredients</h3><table><colgroup><col style="width: 58%"/><col style="width: 12%"/><col style="width: 12%"/><col style="width: 16%"/></colgroup><thead><tr class="header"><th>Ingredient</th><th>50</th><th>100</th><th>140</th></tr></thead><tbody><tr class="odd"><td>Fresh mozzarella, 1–1.5 oz balls</td><td>3 lb</td><td>6 lb</td><td>8.5 lb</td></tr><tr class="even"><td>Prosciutto slices</td><td>6 lb</td><td>12 lb</td><td>17 lb</td></tr><tr class="odd"><td>Olive oil</td><td>½ qt</td><td>1 qt</td><td>1.4 qt</td></tr><tr class="even"><td>Flour (for dusting)</td><td>1 lb</td><td>2 lb</td><td>2.8 lb</td></tr><tr class="odd"><td>Bread crumbs</td><td>2 lb</td><td>4 lb</td><td>5.5 lb</td></tr><tr class="even"><td>Eggs, beaten</td><td>25 ea</td><td>50 ea</td><td>70 ea</td></tr><tr class="odd"><td>Tomato fondue (spicy)</td><td>2 qt</td><td>4 qt</td><td>5.5 qt</td></tr><tr class="even"><td>Red pepper flakes</td><td>2 tbsp</td><td>4 tbsp</td><td>5.5 tbsp</td></tr></tbody></table><h3>Method</h3><ol type="1"><li><p>Wrap mozzarella balls in prosciutto.</p></li><li><p>Dredge in flour, dip in egg, coat with bread crumbs.</p></li><li><p>Fry or bake at 375°F until golden brown (~8–10 min).</p></li><li><p>Serve immediately with spicy tomato fondue.</p></li></ol><p>Holding</p>` ,
@@ -156,6 +155,6 @@ if (typeof window !== 'undefined') {
 if (typeof globalThis !== 'undefined') {
   globalThis.recipesData = recipesData;
 }
-=======
-console.log("worker test 03/05/2026 15:16:19")
->>>>>>> 361037fdcd9f9d02cd80671f655f8153ecf37c8b
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { recipesData };
+}

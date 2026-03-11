@@ -531,6 +531,7 @@ function serializeRecipeScript(menu, data) {
   if (menu === 'lunch') {
     return (
       `const recipesLunchData = ${JSON.stringify(data, null, 2)};\n\n` +
+      `if (typeof module !== 'undefined' && module.exports) {\n  module.exports = { recipesLunchData };\n}\n\n` +
       `if (typeof window !== 'undefined') {\n  window.recipesLunchData = recipesLunchData;\n}\n\n` +
       `if (typeof globalThis !== 'undefined') {\n  globalThis.recipesLunchData = recipesLunchData;\n}\n`
     );
@@ -538,6 +539,7 @@ function serializeRecipeScript(menu, data) {
 
   return (
     `const recipesData = ${JSON.stringify(data, null, 2)};\n\n` +
+    `if (typeof module !== 'undefined' && module.exports) {\n  module.exports = { recipesData };\n}\n\n` +
     `if (typeof window !== 'undefined') {\n  window.recipesData = recipesData;\n}\n\n` +
     `if (typeof globalThis !== 'undefined') {\n  globalThis.recipesData = recipesData;\n}\n`
   );
