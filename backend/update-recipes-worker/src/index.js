@@ -22,20 +22,6 @@ const DAY_ALIASES = {
   sunday: ['Sunday', 'Sun'],
 };
 
-const INGREDIENT_RULES = [
-  { category: 'Protein', keywords: ['chicken', 'beef', 'pork', 'shrimp', 'salmon', 'fish', 'lamb', 'turkey', 'sausage', 'egg'] },
-  { category: 'Dairy', keywords: ['milk', 'cream', 'cheese', 'butter', 'yogurt', 'parmesan', 'feta', 'mozzarella'] },
-  { category: 'Greens', keywords: ['lettuce', 'arugula', 'spinach', 'kale', 'romaine', 'mixed greens'] },
-  { category: 'Vegetable', keywords: ['onion', 'garlic', 'carrot', 'zucchini', 'tomato', 'pepper', 'mushroom', 'potato', 'eggplant'] },
-  { category: 'Fruit', keywords: ['apple', 'berry', 'lemon', 'orange', 'mango', 'banana'] },
-  { category: 'Starch', keywords: ['rice', 'pasta', 'bread', 'flour', 'polenta', 'gnocchi'] },
-  { category: 'Dry', keywords: ['flour', 'cornstarch', 'cornmeal', 'sugar', 'cocoa'] },
-  { category: 'Spices', keywords: ['salt', 'pepper', 'paprika', 'cumin', 'chili', 'thyme', 'rosemary'] },
-  { category: 'Alcohol', keywords: ['wine', 'brandy', 'beer'] },
-  { category: 'Can', keywords: ['canned', 'tomato paste', 'canned beans'] },
-  { category: 'Frozen', keywords: ['frozen'] },
-];
-
 export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
@@ -214,14 +200,15 @@ async function handleApply(request, env) {
 
   const branch = env.GH_BRANCH;
   const menuPath = menu === 'dinner' ? 'menu_overview.js' : 'lunch_menu_data.js';
-  const recipePath = 'frontend/data/recipes.json';
+  const recipePath = menu === 'dinner' ? 'recipes.js' : 'recipeslunch.js';
 
   const menuFile = await githubGetFile(env, menuPath, branch);
   const recipeFile = await githubGetFile(env, recipePath, branch);
 
   const menuVar = menu === 'dinner' ? 'menuOverviewData' : 'lunchMenuData';
+  const recipeVar = menu === 'dinner' ? 'recipesData' : 'recipesLunchData';
   const menuData = parseDataScript(menuFile.content, menuVar);
-  const recipeData = parseRecipeJsonFile(recipeFile.content);
+  const recipeData = parseDataScript(recipeFile.content, recipeVar);
 
   const weekMenuData = getMenuWeek(menuData, menu, week);
   if (!weekMenuData) {
@@ -243,21 +230,23 @@ async function handleApply(request, env) {
   const menuDishBefore = sanitizeText(dayMenu[resolvedSlotKey] || '');
   dayMenu[resolvedSlotKey] = newDishName;
 
-  const menuRecipes = ensureRecipeMenu(recipeData, menu);
-  const weekKey = String(week);
-  const weekRecipes = ensureRecipeWeek(menuRecipes, weekKey);
-
+  const weekRecipes = recipeData[String(week)] || recipeData[week];
+  if (!weekRecipes || typeof weekRecipes !== 'object') {
+    return json({ ok: false, error: `Week ${week} not found in ${recipePath}` }, 400);
+  }
   const recipeKeyBefore = resolveRecipeKey(weekRecipes, [oldDishName, menuDishBefore, newDishName]);
   weekRecipes[newDishName] = newRecipeHtml;
 
   const menuScript = serializeMenuScript(menu, menuData);
-  const recipeScript = serializeRecipeJsonFile(recipeData);
-  const recipeValidation = validateRecipeJson(recipeData);
+  const recipeScript = updateObjectAssignmentInScript(recipeFile.content, recipeVar, recipeData);
+  const recipeValidation = validateRecipeScript(recipeScript, recipeVar);
   if (!recipeValidation.ok) {
     return json({ ok: false, error: recipeValidation.error }, 422);
   }
-  const ingredientIndexPath = 'data/master_ingredients.js';
-  const ingredientIndexScript = buildMasterIngredientsJs(recipeData);
+  const menuValidation = validateScriptSyntax(menuScript, menuPath);
+  if (!menuValidation.ok) {
+    return json({ ok: false, error: menuValidation.error }, 422);
+  }
   const isDryRun = new URL(request.url).searchParams.get('dryRun') === 'true';
 
   if (isDryRun) {
@@ -279,19 +268,23 @@ async function handleApply(request, env) {
         afterKey: newDishName,
         appended: recipeKeyBefore !== newDishName,
       },
-      derivedUpdates: [recipePath, ingredientIndexPath, menuPath],
     }, 200);
   }
 
-  const commitMessage = `Update recipe pipeline: ${menu} W${week} ${dayKey} ${resolvedSlotKey}`;
-  const commit = await githubCommitFilesAtomically(env, {
+  const recipeCommit = await githubUpdateFile(env, {
+    path: recipePath,
     branch,
-    message: commitMessage,
-    files: [
-      { path: recipePath, content: recipeScript },
-      { path: ingredientIndexPath, content: ingredientIndexScript },
-      { path: menuPath, content: menuScript },
-    ],
+    message: `Append recipe HTML: ${menu} W${week} ${dayKey} ${resolvedSlotKey}`,
+    content: recipeScript,
+    sha: recipeFile.sha,
+  });
+
+  const menuCommit = await githubUpdateFile(env, {
+    path: menuPath,
+    branch,
+    message: `Update menu slot title: ${menu} W${week} ${dayKey} ${resolvedSlotKey}`,
+    content: menuScript,
+    sha: menuFile.sha,
   });
 
   return json({
@@ -299,13 +292,10 @@ async function handleApply(request, env) {
     status: 'updated',
     menuPath,
     recipePath,
-    ingredientIndexPath,
-    commitSha: commit.commitSha || null,
-    commitUrl: commit.commitUrl || null,
-    menuCommitSha: commit.commitSha || null,
-    recipeCommitSha: commit.commitSha || null,
-    recipeCommitUrl: commit.commitUrl || null,
-    menuCommitUrl: commit.commitUrl || null,
+    menuCommitSha: menuCommit.commit?.sha || null,
+    recipeCommitSha: recipeCommit.commit?.sha || null,
+    recipeCommitUrl: recipeCommit.commit?.html_url || null,
+    menuCommitUrl: menuCommit.commit?.html_url || null,
   }, 200);
 }
 
@@ -399,144 +389,43 @@ function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function parseRecipeJsonFile(fileText) {
-  let parsed;
+function updateObjectAssignmentInScript(scriptText, varName, value) {
+  const startIndex = findObjectAssignmentStart(scriptText, varName);
+  if (startIndex === -1) {
+    throw createError(400, `Could not find ${varName} assignment in script`);
+  }
+
+  const endIndex = findMatchingBrace(scriptText, startIndex);
+  if (endIndex === -1) {
+    throw createError(400, `Could not parse ${varName}: unmatched braces`);
+  }
+
+  const replacement = JSON.stringify(value, null, 2);
+  return `${scriptText.slice(0, startIndex)}${replacement}${scriptText.slice(endIndex + 1)}`;
+}
+
+function validateRecipeScript(scriptText, varName) {
+  const syntax = validateScriptSyntax(scriptText, `${varName}.js`);
+  if (!syntax.ok) return syntax;
+
   try {
-    parsed = JSON.parse(fileText);
-  } catch (_error) {
-    throw createError(400, 'Could not parse frontend/data/recipes.json');
-  }
-
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw createError(400, 'frontend/data/recipes.json must contain an object');
-  }
-
-  return parsed;
-}
-
-function ensureRecipeMenu(recipeData, menu) {
-  if (!recipeData[menu] || typeof recipeData[menu] !== 'object' || Array.isArray(recipeData[menu])) {
-    recipeData[menu] = {};
-  }
-  return recipeData[menu];
-}
-
-function ensureRecipeWeek(menuRecipes, weekKey) {
-  if (!menuRecipes[weekKey] || typeof menuRecipes[weekKey] !== 'object' || Array.isArray(menuRecipes[weekKey])) {
-    menuRecipes[weekKey] = {};
-  }
-  return menuRecipes[weekKey];
-}
-
-function serializeRecipeJsonFile(recipeData) {
-  return `${JSON.stringify(recipeData, null, 2)}\n`;
-}
-
-function validateRecipeJson(recipeData) {
-  if (!recipeData || typeof recipeData !== 'object' || Array.isArray(recipeData)) {
-    return { ok: false, error: 'recipes.json must be a top-level object' };
-  }
-
-  for (const menu of ['dinner', 'lunch']) {
-    const menuRecipes = recipeData[menu];
-    if (!menuRecipes || typeof menuRecipes !== 'object' || Array.isArray(menuRecipes)) {
-      return { ok: false, error: `recipes.json is missing ${menu} recipe data` };
+    const data = parseDataScript(scriptText, varName);
+    if (!data || typeof data !== 'object') {
+      return { ok: false, error: `${varName} did not evaluate to an object` };
     }
-
-    const weekKeys = Object.keys(menuRecipes).filter((key) => /^\d+$/.test(String(key)));
-    if (!weekKeys.length) {
-      return { ok: false, error: `recipes.json has no valid ${menu} week keys` };
-    }
-
-    for (const weekKey of weekKeys) {
-      const weekRecipes = menuRecipes[weekKey];
-      if (!weekRecipes || typeof weekRecipes !== 'object' || Array.isArray(weekRecipes)) {
-        return { ok: false, error: `recipes.json ${menu} week ${weekKey} must be an object` };
-      }
-
-      for (const recipeKey of Object.keys(weekRecipes)) {
-        if (typeof weekRecipes[recipeKey] !== 'string') {
-          return { ok: false, error: `recipes.json ${menu} week ${weekKey} recipe "${recipeKey}" must be a string` };
-        }
-      }
-    }
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error.message || String(error) };
   }
-
-  return { ok: true };
 }
 
-function buildMasterIngredientsJs(recipeData) {
-  const allRecipeHtml = [
-    ...getRecipeHtmlStrings(recipeData?.dinner),
-    ...getRecipeHtmlStrings(recipeData?.lunch),
-  ];
-
-  const deduped = new Map();
-  for (const recipeHtml of allRecipeHtml) {
-    const ingredients = extractIngredientsFromHtml(recipeHtml);
-    for (const ingredient of ingredients) {
-      const key = ingredient.toLowerCase();
-      if (!deduped.has(key)) {
-        deduped.set(key, ingredient);
-      }
-    }
+function validateScriptSyntax(scriptText, label) {
+  try {
+    new Function(scriptText);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: `Invalid JavaScript for ${label}: ${error.message || String(error)}` };
   }
-
-  const entries = Array.from(deduped.values())
-    .sort((a, b) => a.localeCompare(b))
-    .map((name) => ({ name, category: classifyIngredient(name) }));
-
-  const lines = ['const masterIngredients = ['];
-  for (const entry of entries) {
-    const name = entry.name.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    const category = entry.category.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    lines.push(`  { name: "${name}", category: "${category}" },`);
-  }
-  lines.push('];', '', 'export default masterIngredients;', '');
-  return lines.join('\n');
-}
-
-function getRecipeHtmlStrings(dataset) {
-  const htmlStrings = [];
-  if (!dataset || typeof dataset !== 'object') return htmlStrings;
-
-  for (const weekRecipes of Object.values(dataset)) {
-    if (!weekRecipes || typeof weekRecipes !== 'object') continue;
-    for (const recipeHtml of Object.values(weekRecipes)) {
-      if (typeof recipeHtml === 'string') htmlStrings.push(recipeHtml);
-    }
-  }
-
-  return htmlStrings;
-}
-
-function extractIngredientsFromHtml(recipeHtml) {
-  const ingredients = [];
-  const tbodyMatches = String(recipeHtml || '').match(/<tbody[\s\S]*?<\/tbody>/gi) || [];
-
-  for (const tbody of tbodyMatches) {
-    const trMatches = tbody.match(/<tr[\s\S]*?<\/tr>/gi) || [];
-    for (const tr of trMatches) {
-      const firstTdMatch = tr.match(/<td\b[^>]*>([\s\S]*?)<\/td>/i);
-      if (!firstTdMatch) continue;
-      const ingredient = sanitizeText(firstTdMatch[1]);
-      if (!ingredient) continue;
-      if (ingredient.toLowerCase() === 'ingredient') continue;
-      ingredients.push(ingredient);
-    }
-  }
-
-  return ingredients;
-}
-
-function classifyIngredient(ingredient) {
-  const lower = String(ingredient || '').toLowerCase();
-  for (const rule of INGREDIENT_RULES) {
-    for (const keyword of rule.keywords) {
-      if (lower.includes(keyword)) return rule.category;
-    }
-  }
-  return 'Uncategorized';
 }
 
 function findObjectAssignmentStart(scriptText, varName) {

@@ -132,7 +132,7 @@ function hasWeekLikeRecipeData(data) {
 
 function validateRecipeData(label, data) {
   if (!hasWeekLikeRecipeData(data)) {
-    reportBootError(`Recipe data failed to load. Check frontend/data/recipes.json (${label}).`);
+    reportBootError(`Recipe data failed to load. Check recipes.js/recipeslunch.js (${label}).`);
     return null;
   }
   return data;
@@ -153,9 +153,20 @@ const mealData = {
   dinner: dinnerMenuDataStore,
   lunch: lunchMenuDataStore
 };
-const RECIPES_JSON_PATH = 'frontend/data/recipes.json';
-let recipesStore = null;
-let lunchRecipesStore = {};
+const dinnerRecipesGlobal = resolveGlobalValue('recipesData') || null;
+const lunchRecipesGlobal = resolveGlobalValue('recipesLunchData') || null;
+console.log('recipesData global (window):', window.recipesData ?? null);
+console.log('recipesLunchData global (window):', window.recipesLunchData ?? null);
+console.log('recipesData resolved:', dinnerRecipesGlobal);
+console.log('recipesLunchData resolved:', lunchRecipesGlobal);
+if (!dinnerRecipesGlobal) {
+  console.error('Dinner recipes missing');
+}
+if (!lunchRecipesGlobal) {
+  console.error('Lunch recipes missing');
+}
+const recipesStore = validateRecipeData('Dinner Recipes', dinnerRecipesGlobal);
+const lunchRecipesStore = validateRecipeData('Lunch Recipes', lunchRecipesGlobal) || {};
 
 let selectedDish = null;
 let selectedMeal = 'dinner';
@@ -179,35 +190,6 @@ const WEEKLY_DAY_KEYS = {
   Saturday: ['Saturday', 'Sat'],
   Sunday: ['Sunday', 'Sun']
 };
-
-async function loadRecipeStores() {
-  try {
-    const response = await fetch(RECIPES_JSON_PATH, { cache: 'no-store' });
-    if (!response.ok) {
-      reportBootError(`Recipe data request failed (${response.status})`);
-      return false;
-    }
-
-    const payload = await response.json();
-    const dinnerRecipes = validateRecipeData('Dinner Recipes', asObject(payload && payload.dinner));
-    const lunchRecipes = validateRecipeData('Lunch Recipes', asObject(payload && payload.lunch)) || {};
-
-    recipesStore = dinnerRecipes;
-    lunchRecipesStore = lunchRecipes;
-    globalThis.recipesData = dinnerRecipes;
-    globalThis.recipesLunchData = lunchRecipes;
-    if (typeof window !== 'undefined') {
-      window.recipesData = dinnerRecipes;
-      window.recipesLunchData = lunchRecipes;
-    }
-    return true;
-  } catch (error) {
-    reportBootError(`Recipe data request failed: ${error.message || error}`);
-    recipesStore = null;
-    lunchRecipesStore = {};
-    return false;
-  }
-}
 
 function normalizeToken(value) {
   return String(value == null ? '' : value)
@@ -643,7 +625,7 @@ function renderRecipe() {
 
   const store = selectedMeal === 'dinner' ? recipesStore : lunchRecipesStore;
   if (!store || typeof store !== 'object') {
-    recipeDetails.innerHTML = '<p>Recipe data failed to load. Check frontend/data/recipes.json.</p>';
+    recipeDetails.innerHTML = '<p>Recipe data failed to load. Check recipes.js/recipeslunch.js.</p>';
     return;
   }
   const weekRecipes = store && store[week];
@@ -1671,7 +1653,7 @@ function renderBootErrorsBanner() {
     shell.prepend(banner);
   }
 
-  banner.textContent = `Recipe data failed to load. Check frontend/data/recipes.json. ${bootErrors.join(' | ')}`;
+  banner.textContent = `Recipe data failed to load. Check recipes.js/recipeslunch.js. ${bootErrors.join(' | ')}`;
 }
 
 function validateRequiredSelectors() {
@@ -1755,9 +1737,8 @@ function registerTestHooks() {
   }
 }
 
-async function init() {
+function init() {
   validateRequiredSelectors();
-  await loadRecipeStores();
   cleanUpStorage();
   applyStoredRecipeOverrides();
   registerTestHooks();
@@ -1805,9 +1786,7 @@ async function init() {
 
 document.addEventListener('DOMContentLoaded', () => {
   try {
-    Promise.resolve(init()).catch((error) => {
-      console.error(error.message || error);
-    });
+    init();
   } catch (error) {
     console.error(error.message || error);
   }
