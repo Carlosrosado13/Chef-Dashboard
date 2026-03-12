@@ -193,6 +193,7 @@ async function handleApply(request, env) {
   const slotKey = sanitizeText(body.slotKey || '');
   const oldDishName = sanitizeText(body.oldDishName || '');
   const newDishName = sanitizeText(body.newDishName || '');
+  const recipeData = normalizeExtractedRecipePayload(body.recipeData || {});
   const newRecipeHtml = String(body.newRecipeHtml || '').trim();
 
   const missing = [];
@@ -202,7 +203,7 @@ async function handleApply(request, env) {
   if (!slotKey) missing.push('slotKey');
   if (!oldDishName) missing.push('oldDishName');
   if (!newDishName) missing.push('newDishName');
-  if (!newRecipeHtml) missing.push('newRecipeHtml');
+  if (!recipeData.title) missing.push('recipeData.title');
   if (missing.length) {
     return json({
       ok: false,
@@ -210,10 +211,17 @@ async function handleApply(request, env) {
     }, 400);
   }
 
-  const recipeHtmlValidation = validateIncomingRecipeHtml(newRecipeHtml);
-  if (!recipeHtmlValidation.ok) {
-    return json({ ok: false, error: recipeHtmlValidation.error }, 422);
+  const normalizedRecipe = normalizeExtractedRecipePayload({
+    ...recipeData,
+    title: recipeData.title || newDishName,
+    portion: recipeData.portion || '',
+    yield: recipeData.yield || recipeData.servings || '',
+  });
+  const recipeValidation = validateExtractedRecipePayload(normalizedRecipe);
+  if (!recipeValidation.ok) {
+    return json({ ok: false, error: recipeValidation.error }, 422);
   }
+  const finalRecipeHtml = newRecipeHtml || generateRecipeHtml(recipeValidation.recipe);
 
   const branch = env.GH_BRANCH;
   const menuPath = 'data/menu.json';
@@ -225,11 +233,11 @@ async function handleApply(request, env) {
   const ingredientsFile = await githubGetFile(env, ingredientsPath, branch);
 
   let menuData;
-  let recipeData;
+  let recipeList;
   let ingredientsData;
   try {
     menuData = parseMenuJsonFile(menuFile.content, menuPath);
-    recipeData = parseRecipeJsonFile(recipeFile.content, recipePath).dataObject;
+    recipeList = parseRecipeJsonFile(recipeFile.content, recipePath).dataObject;
     ingredientsData = parseIngredientsJsonFile(ingredientsFile.content, ingredientsPath);
   } catch (error) {
     throw createError(400, error.message || String(error));
@@ -255,26 +263,35 @@ async function handleApply(request, env) {
   const menuDishBefore = sanitizeText(dayMenu[resolvedSlotKey] || '');
   dayMenu[resolvedSlotKey] = newDishName;
 
-  const weekRecipes = recipeData[String(week)] || recipeData[week];
-  if (!weekRecipes || typeof weekRecipes !== 'object') {
-    return json({ ok: false, error: `Week ${week} not found in ${recipePath}` }, 400);
-  }
+  const weekRecipes = groupRecipesByWeek(recipeList)[String(week)] || {};
   const recipeKeyBefore = resolveRecipeKey(weekRecipes, [oldDishName, menuDishBefore, newDishName]);
-  weekRecipes[newDishName] = newRecipeHtml;
+  const nextRecipeRecord = {
+    ...recipeValidation.recipe,
+    menu,
+    week,
+    title: newDishName,
+    recipeKey: newDishName,
+    generatedHtml: finalRecipeHtml,
+  };
+  const nextRecipeList = recipeList.filter((record) => !(
+    Number(record && record.week) === Number(week) &&
+    normalizeToken(record && (record.recipeKey || record.title)) === normalizeToken(recipeKeyBefore || newDishName)
+  ));
+  nextRecipeList.push(nextRecipeRecord);
 
   const nextIngredientsData = {
     ...ingredientsData,
     menu: menu === 'dinner'
-      ? buildDinnerIngredientMenu(menuData.dinner || {}, recipeData, ingredientsData.menu)
+      ? buildDinnerIngredientMenu(menuData.dinner || {}, nextRecipeList.filter((record) => normalizeToken(record.menu || 'dinner') === 'dinner'), ingredientsData.menu)
       : ingredientsData.menu,
   };
 
   const menuScript = serializeMenuJsonFile(menuData);
-  const recipeScript = serializeRecipeJsonFile(recipeData);
+  const recipeScript = serializeRecipeJsonFile(nextRecipeList);
   const ingredientsScript = serializeIngredientsJsonFile(nextIngredientsData);
-  const recipeValidation = validateRecipeJsonFile(recipeScript, recipePath);
-  if (!recipeValidation.ok) {
-    return json({ ok: false, error: recipeValidation.error }, 422);
+  const recipeFileValidation = validateRecipeJsonFile(recipeScript, recipePath);
+  if (!recipeFileValidation.ok) {
+    return json({ ok: false, error: recipeFileValidation.error }, 422);
   }
   const menuValidation = validateMenuJsonFile(menuScript, menuPath);
   if (!menuValidation.ok) {
@@ -356,8 +373,8 @@ function parseRecipeJsonFile(fileText, filePath) {
     throw new Error(`Invalid JSON in ${filePath}: ${error.message || String(error)}`);
   }
 
-  if (!dataObject || typeof dataObject !== 'object' || Array.isArray(dataObject)) {
-    throw new Error(`${filePath} must contain an object`);
+  if (!Array.isArray(dataObject)) {
+    throw new Error(`${filePath} must contain an array`);
   }
 
   return { dataObject };
@@ -418,32 +435,25 @@ function serializeIngredientsJsonFile(dataObject) {
 function validateRecipeJsonFile(fileText, filePath) {
   try {
     const parsed = parseRecipeJsonFile(fileText, filePath);
-    const weekKeys = Object.keys(parsed.dataObject || {}).filter((key) => /^\d+$/.test(String(key)));
-    if (!weekKeys.length) {
-      return { ok: false, error: `${filePath} has no valid numeric week keys` };
+    if (!parsed.dataObject.length) {
+      return { ok: false, error: `${filePath} must contain recipes` };
     }
-    for (let i = 0; i < weekKeys.length; i += 1) {
-      const weekKey = weekKeys[i];
-      const weekRecipes = parsed.dataObject[weekKey];
-      if (!weekRecipes || typeof weekRecipes !== 'object' || Array.isArray(weekRecipes)) {
-        return { ok: false, error: `${filePath} week ${weekKey} must be an object` };
+    for (let index = 0; index < parsed.dataObject.length; index += 1) {
+      const recipe = parsed.dataObject[index];
+      if (!recipe || typeof recipe !== 'object' || Array.isArray(recipe)) {
+        return { ok: false, error: `${filePath}[${index}] must be an object` };
       }
-      const recipeKeys = Object.keys(weekRecipes);
-      if (!recipeKeys.length) {
-        return { ok: false, error: `${filePath} week ${weekKey} must contain recipes` };
+      if (!sanitizeText(recipe.title || '')) {
+        return { ok: false, error: `${filePath}[${index}] title is required` };
       }
-      for (let j = 0; j < recipeKeys.length; j += 1) {
-        const recipeKey = recipeKeys[j];
-        const html = normalizeStoredRecipeHtml(weekRecipes[recipeKey]);
-        if (!html) {
-          return { ok: false, error: `${filePath} recipe "${recipeKey}" must be a non-empty HTML string` };
-        }
-        if (!/<h2[\s>][\s\S]*?<\/h2>/i.test(html)) {
-          return { ok: false, error: `${filePath} recipe "${recipeKey}" must include a recipe title` };
-        }
-        if (!/<table[\s\S]*?<\/table>/i.test(html)) {
-          return { ok: false, error: `${filePath} recipe "${recipeKey}" must include an ingredient table` };
-        }
+      if (!Number.isFinite(Number(recipe.week)) || Number(recipe.week) < 1) {
+        return { ok: false, error: `${filePath}[${index}] week is required` };
+      }
+      const htmlValidation = validateStoredRecipeHtml(
+        typeof recipe.generatedHtml === 'string' ? recipe.generatedHtml : ''
+      );
+      if (!htmlValidation.ok) {
+        return { ok: false, error: `${filePath}[${index}] ${htmlValidation.error}` };
       }
     }
     return { ok: true };
@@ -475,6 +485,24 @@ function getMenuWeek(menuData, menu, week) {
   if (!branch || typeof branch !== 'object') return null;
   if (menu === 'lunch') return branch[`Week ${week}`] || null;
   return branch[String(week)] || branch[week] || null;
+}
+
+function groupRecipesByWeek(recipeList) {
+  const grouped = {};
+  (Array.isArray(recipeList) ? recipeList : []).forEach((record) => {
+    const normalized = normalizeExtractedRecipePayload(record);
+    const week = Number(record && record.week);
+    const key = sanitizeText(record && (record.recipeKey || record.title || normalized.title));
+    if (!week || !key) return;
+    const weekKey = String(week);
+    if (!grouped[weekKey]) grouped[weekKey] = {};
+    grouped[weekKey][key] = {
+      ...record,
+      ...normalized,
+      generatedHtml: typeof record?.generatedHtml === 'string' ? record.generatedHtml.trim() : '',
+    };
+  });
+  return grouped;
 }
 
 function resolveRecipeKey(weekRecipes, candidates) {
@@ -688,7 +716,7 @@ function validateIncomingRecipeHtml(html) {
   if (!/<h2[\s>][\s\S]*?<\/h2>/i.test(text)) {
     return { ok: false, error: 'Recipe HTML must include a recipe name in an <h2> tag.' };
   }
-  if (!/(<strong>\s*Yield:\s*<\/strong>|<p>\s*Portion:)/i.test(text)) {
+  if (!/(<strong>\s*(Yield|Portion)\s*:\s*<\/strong>|<p>\s*(Yield|Portion)\s*:)/i.test(text)) {
     return { ok: false, error: 'Recipe HTML must include portion information.' };
   }
   if (!/<h3[^>]*>\s*Ingredients\s*<\/h3>/i.test(text)) {
@@ -705,6 +733,18 @@ function validateIncomingRecipeHtml(html) {
   }
   if (!/<h3[^>]*>\s*Method\s*<\/h3>/i.test(text) || !/<ol[\s\S]*?<li[\s\S]*?<\/li>[\s\S]*?<\/ol>/i.test(text)) {
     return { ok: false, error: 'Recipe HTML must include a preparation method.' };
+  }
+  return { ok: true };
+}
+
+function validateStoredRecipeHtml(html) {
+  const text = String(html || '').trim();
+  if (!text) return { ok: false, error: 'Recipe HTML is required.' };
+  if (!/<h2[\s>][\s\S]*?<\/h2>/i.test(text)) {
+    return { ok: false, error: 'Recipe HTML must include a recipe name in an <h2> tag.' };
+  }
+  if (!/<table[\s\S]*?<\/table>/i.test(text)) {
+    return { ok: false, error: 'Recipe HTML must include an ingredient table.' };
   }
   return { ok: true };
 }
@@ -769,6 +809,7 @@ function buildCategoryLookup(currentIngredientMenu) {
 
 function buildDinnerIngredientMenu(dinnerMenuData, dinnerRecipes, currentIngredientMenu) {
   if (!dinnerRecipes || typeof dinnerRecipes !== 'object') return Array.isArray(currentIngredientMenu) ? currentIngredientMenu : [];
+  const recipesByWeek = Array.isArray(dinnerRecipes) ? groupRecipesByWeek(dinnerRecipes) : dinnerRecipes;
 
   const categoryLookup = buildCategoryLookup(currentIngredientMenu);
   const generatedMenu = [];
@@ -782,7 +823,7 @@ function buildDinnerIngredientMenu(dinnerMenuData, dinnerRecipes, currentIngredi
       const categories = { produce: [], protein: [], dairy: [], dry: [], other: [] };
       const seenByCategory = { produce: new Set(), protein: new Set(), dairy: new Set(), dry: new Set(), other: new Set() };
       const dayMenu = weekDays[day];
-      const weekRecipes = dinnerRecipes[weekKey] || {};
+      const weekRecipes = recipesByWeek[weekKey] || {};
 
       Object.keys(dayMenu || {}).forEach((slotKey) => {
         const dishName = sanitizeText(dayMenu[slotKey] || '');

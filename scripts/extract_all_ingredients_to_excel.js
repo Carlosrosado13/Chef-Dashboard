@@ -47,6 +47,13 @@ function cleanText(value) {
 
 function getRecipeHtmlStrings(dataset) {
   const htmlStrings = [];
+  if (Array.isArray(dataset)) {
+    dataset.forEach((record) => {
+      const html = record && typeof record.generatedHtml === 'string' ? record.generatedHtml : '';
+      if (html) htmlStrings.push(html);
+    });
+    return htmlStrings;
+  }
   if (!dataset || typeof dataset !== 'object') return htmlStrings;
 
   for (const weekRecipes of Object.values(dataset)) {
@@ -54,6 +61,8 @@ function getRecipeHtmlStrings(dataset) {
     for (const recipeHtml of Object.values(weekRecipes)) {
       if (typeof recipeHtml === 'string') {
         htmlStrings.push(recipeHtml);
+      } else if (recipeHtml && typeof recipeHtml.generatedHtml === 'string') {
+        htmlStrings.push(recipeHtml.generatedHtml);
       }
     }
   }

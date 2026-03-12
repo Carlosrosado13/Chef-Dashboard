@@ -8,6 +8,7 @@ const {
   DINNER_RECIPES_JSON_PATH,
   LUNCH_RECIPES_JSON_PATH,
   readRecipesJson,
+  groupRecipesByWeek,
   readMenuJson,
   writeMenuJson,
   readIngredientsJson,
@@ -175,8 +176,8 @@ function resolveExistingRecipeKey(weekData, candidates) {
 
 function validateUpdatedRecipeData(menuRecipes, menu, week, key) {
   validateRecipeDataset(`${menu} recipes`, menuRecipes);
-  const weekData = menuRecipes[String(week)] || menuRecipes[week];
-  if (!Object.prototype.hasOwnProperty.call(weekData, key)) throw new Error(`${menu} recipes JSON updated key "${key}" missing after patch.`);
+  const match = menuRecipes.find((record) => Number(record.week) === Number(week) && String(record.title || '').trim() === key);
+  if (!match) throw new Error(`${menu} recipes JSON updated key "${key}" missing after patch.`);
 }
 
 function runGlobalValidator() {
@@ -213,18 +214,31 @@ function main() {
   const recipes = readRecipesJson();
   const menuData = readMenuJson();
   const ingredientsData = readIngredientsJson();
-  const menuRecipes = recipes[patch.menu] && typeof recipes[patch.menu] === 'object' && !Array.isArray(recipes[patch.menu])
-    ? recipes[patch.menu]
-    : {};
-  const weekKey = String(patch.week);
-  const weekRecipes = menuRecipes[weekKey] && typeof menuRecipes[weekKey] === 'object' && !Array.isArray(menuRecipes[weekKey])
-    ? menuRecipes[weekKey]
-    : (menuRecipes[weekKey] = {});
+  const menuRecipes = Array.isArray(recipes[patch.menu]) ? recipes[patch.menu].slice() : [];
+  const weekRecipes = groupRecipesByWeek(menuRecipes)[String(patch.week)] || {};
 
   const oldKeyCandidates = [patch.oldRecipeKey, patch.oldDishName, patch.recipeData.title].filter(Boolean);
   const oldKey = resolveExistingRecipeKey(weekRecipes, oldKeyCandidates);
-  weekRecipes[patch.recipeData.title] = buildRecipeHtml(patch.recipeData);
-  validateUpdatedRecipeData(menuRecipes, patch.menu, patch.week, patch.recipeData.title);
+  const nextRecord = {
+    menu: patch.menu,
+    week: patch.week,
+    title: patch.recipeData.title,
+    recipeKey: patch.recipeData.title,
+    portion: patch.recipeData.portion || '',
+    yield: patch.recipeData.yield || patch.recipeData.servings || '',
+    ingredients: Array.isArray(patch.recipeData.structuredIngredients)
+      ? patch.recipeData.structuredIngredients
+      : [],
+    steps: patch.recipeData.steps,
+    sourceUrl: patch.recipeData.sourceUrl,
+    generatedHtml: buildRecipeHtml(patch.recipeData),
+  };
+  const retainedRecipes = menuRecipes.filter((record) => !(
+    Number(record.week) === Number(patch.week) &&
+    normalizeRecipeKey(record.title) === normalizeRecipeKey(oldKey || patch.recipeData.title)
+  ));
+  retainedRecipes.push(nextRecord);
+  validateUpdatedRecipeData(retainedRecipes, patch.menu, patch.week, patch.recipeData.title);
 
   const recipeJsonPath = patch.menu === 'lunch' ? LUNCH_RECIPES_JSON_PATH : DINNER_RECIPES_JSON_PATH;
   const menuBranch = patch.menu === 'lunch' ? menuData.lunch : menuData.dinner;
@@ -247,11 +261,11 @@ function main() {
 
   const nextIngredientsData = {
     ...ingredientsData,
-    menu: buildDinnerIngredientMenu(menuData.dinner || {}, recipes.dinner || {}, ingredientsData.menu),
+    menu: buildDinnerIngredientMenu(menuData.dinner || {}, patch.menu === 'dinner' ? retainedRecipes : (recipes.dinner || []), ingredientsData.menu),
   };
 
   writeMenuJson(menuData);
-  fs.writeFileSync(recipeJsonPath, `${JSON.stringify(menuRecipes, null, 2)}\n`, 'utf8');
+  fs.writeFileSync(recipeJsonPath, `${JSON.stringify(retainedRecipes, null, 2)}\n`, 'utf8');
   writeIngredientsJson(nextIngredientsData);
   rebuildIngredientIndex();
   runGlobalValidator();

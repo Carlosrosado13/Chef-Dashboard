@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { normalizeStoredRecipeHtml } = require('./recipeValidation');
+const { migrateRecipeCollection, groupRecipesByWeek, stripHtml } = require('./recipeSchema');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
 const DATA_DIR = path.join(ROOT_DIR, 'data');
@@ -14,8 +15,8 @@ const ingredientCategories = ['produce', 'protein', 'dairy', 'dry', 'other'];
 function readJsonFile(filePath, label) {
   const source = fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '');
   const parsed = JSON.parse(source);
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error(`${label} must contain an object`);
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error(`${label} must contain valid JSON`);
   }
   return parsed;
 }
@@ -25,9 +26,17 @@ function writeJsonFile(filePath, data) {
 }
 
 function readRecipesJson() {
-  const dinner = readJsonFile(DINNER_RECIPES_JSON_PATH, 'data/recipes.json');
-  const lunch = readJsonFile(LUNCH_RECIPES_JSON_PATH, 'data/recipes_lunch.json');
-  return { all: { dinner, lunch }, dinner, lunch };
+  const dinnerRaw = readJsonFile(DINNER_RECIPES_JSON_PATH, 'data/recipes.json');
+  const lunchRaw = readJsonFile(LUNCH_RECIPES_JSON_PATH, 'data/recipes_lunch.json');
+  const dinnerList = migrateRecipeCollection('dinner', dinnerRaw);
+  const lunchList = migrateRecipeCollection('lunch', lunchRaw);
+  return {
+    all: { dinner: dinnerList, lunch: lunchList },
+    dinner: dinnerList,
+    lunch: lunchList,
+    dinnerByWeek: groupRecipesByWeek(dinnerList),
+    lunchByWeek: groupRecipesByWeek(lunchList),
+  };
 }
 
 function readMenuJson() {
@@ -44,23 +53,6 @@ function readIngredientsJson() {
 
 function writeIngredientsJson(data) {
   writeJsonFile(INGREDIENTS_JSON_PATH, data);
-}
-
-function decodeEntities(value) {
-  return String(value || '')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>');
-}
-
-function stripHtml(value) {
-  return decodeEntities(value)
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 function normalizeName(value) {
@@ -152,6 +144,7 @@ function findRecipeKey(weekRecipes, dishName) {
 function buildDinnerIngredientMenu(dinnerMenuData, dinnerRecipes, currentIngredientMenu) {
   const categoryLookup = buildCategoryLookup(currentIngredientMenu);
   const generatedMenu = [];
+  const recipesByWeek = Array.isArray(dinnerRecipes) ? groupRecipesByWeek(dinnerRecipes) : dinnerRecipes;
 
   Object.keys(dinnerMenuData || {}).forEach((weekKey) => {
     const weekNumber = Number(weekKey);
@@ -162,7 +155,7 @@ function buildDinnerIngredientMenu(dinnerMenuData, dinnerRecipes, currentIngredi
       const categories = { produce: [], protein: [], dairy: [], dry: [], other: [] };
       const seenByCategory = { produce: new Set(), protein: new Set(), dairy: new Set(), dry: new Set(), other: new Set() };
       const dayMenu = weekDays[day];
-      const weekRecipes = dinnerRecipes[weekKey] || {};
+      const weekRecipes = recipesByWeek[weekKey] || {};
 
       Object.keys(dayMenu || {}).forEach((slotKey) => {
         const dishName = String(dayMenu[slotKey] || '').trim();
@@ -208,6 +201,7 @@ module.exports = {
   readJsonFile,
   writeJsonFile,
   readRecipesJson,
+  groupRecipesByWeek,
   readMenuJson,
   writeMenuJson,
   readIngredientsJson,

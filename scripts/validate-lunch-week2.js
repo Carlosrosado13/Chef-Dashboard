@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { readMenuJson, readRecipesJson } = require('./dataStore');
+const { readMenuJson, readRecipesJson, groupRecipesByWeek } = require('./dataStore');
 
 function normalizeTitle(value) {
   return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -9,7 +9,7 @@ function normalizeTitle(value) {
 const menu = readMenuJson();
 const recipes = readRecipesJson();
 const lunchMenuData = menu.lunch || {};
-const lunchRecipes = recipes.lunch || {};
+const lunchRecipes = groupRecipesByWeek(recipes.lunch || []);
 const dinnerMenuData = menu.dinner || {};
 
 const weekKey = '2';
@@ -27,7 +27,8 @@ for (const day of days) {
   for (const slot of ['SOUP', 'SALAD', 'MAIN 1', 'MAIN 2', 'DESSERT']) {
     const menuTitle = menuDay[slot];
     if (!menuTitle) continue;
-    const recipeHtml = recipeWeek[menuTitle];
+    const recipeEntry = recipeWeek[menuTitle];
+    const recipeHtml = typeof recipeEntry === 'string' ? recipeEntry : recipeEntry && recipeEntry.generatedHtml;
     if (!recipeHtml) {
       errors.push(`${day} missing recipe for slot ${slot}: '${menuTitle}'.`);
       continue;

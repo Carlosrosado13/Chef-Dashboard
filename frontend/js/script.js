@@ -99,26 +99,44 @@ function reportBootError(message) {
   console.error(text);
 }
 
-function hasWeekLikeRecipeData(data) {
-  if (!data || typeof data !== 'object') return false;
-  const keys = Object.keys(data);
-  if (!keys.length) return false;
+function hasStructuredRecipeList(data) {
+  if (!Array.isArray(data) || !data.length) return false;
+  return data.every((recipe) => {
+    if (!recipe || typeof recipe !== 'object') return false;
+    if (!asString(recipe.title).trim()) return false;
+    if (!Number.isFinite(Number(recipe.week)) || Number(recipe.week) <= 0) return false;
+    if (asString(recipe.generatedHtml).trim()) return true;
+    if (!asString(recipe.portion || recipe.yield || recipe.servings).trim()) return false;
+    if (!Array.isArray(recipe.ingredients) || !recipe.ingredients.length) return false;
+    if (!Array.isArray(recipe.steps) || !recipe.steps.length) return false;
+    return recipe.ingredients.every((ingredient) => ingredient && typeof ingredient === 'object' && asString(ingredient.name).trim() && asString(ingredient.amount).trim());
+  });
+}
 
-  const weekKeys = keys.filter(key => Number.isFinite(Number(String(key).replace(/[^\d]/g, ''))));
-  if (!weekKeys.length) return false;
-
-  const sampleWeek = data[weekKeys[0]];
-  if (!sampleWeek || typeof sampleWeek !== 'object') return false;
-
-  return Object.values(sampleWeek).some(value => typeof value === 'string');
+function buildRecipeStoreFromList(recipeList) {
+  const grouped = {};
+  asArray(recipeList).forEach((recipe) => {
+    const recipeHtml = asString(recipe && recipe.generatedHtml).trim();
+    const normalizedRecipe = normalizeStoredRecipeRecord(recipe, recipeHtml);
+    const week = normalizeWeekValue(recipe && recipe.week);
+    const title = asString(recipe && (recipe.recipeKey || recipe.title)).trim();
+    if (!week || !title) return;
+    if (!grouped[week]) grouped[week] = {};
+    grouped[week][title] = {
+      ...recipe,
+      ...normalizedRecipe,
+      generatedHtml: recipeHtml || buildGeneratedRecipeHtml(normalizedRecipe),
+    };
+  });
+  return grouped;
 }
 
 function validateRecipeData(label, data) {
-  if (!hasWeekLikeRecipeData(data)) {
+  if (!hasStructuredRecipeList(data)) {
     reportBootError(`Recipe data failed to load (${label}).`);
     return null;
   }
-  return data;
+  return buildRecipeStoreFromList(data);
 }
 
 function validateMenuData(label, data) {
@@ -443,6 +461,19 @@ function normalizeExtractedRecipe(recipeJson) {
   };
 }
 
+function extractPortionFieldsFromHtml(recipeHtml) {
+  const html = asString(recipeHtml);
+  const portionMatch = html.match(/<(p|div|span)[^>]*>\s*(?:<strong>)?\s*Portion\s*:?\s*(?:<\/strong>)?\s*([\s\S]*?)<\/(p|div|span)>/i);
+  if (portionMatch) {
+    return { portion: stripHtml(portionMatch[2]), yield: '' };
+  }
+  const yieldMatch = html.match(/<(p|div|span)[^>]*>\s*(?:<strong>)?\s*Yield\s*:?\s*(?:<\/strong>)?\s*([\s\S]*?)<\/(p|div|span)>/i);
+  if (yieldMatch) {
+    return { portion: '', yield: stripHtml(yieldMatch[2]) };
+  }
+  return { portion: '', yield: '' };
+}
+
 function stripHtml(value) {
   if (!value) return '';
   return value
@@ -501,6 +532,64 @@ function parseIngredientsFromRecipeHtml(recipeHtml) {
     rows.push({ name: ingredientName, quantity: amount.quantity, unit: amount.unit });
   });
   return rows;
+}
+
+function extractStructuredIngredientsFromHtml(recipeHtml) {
+  return parseIngredientsFromRecipeHtml(recipeHtml)
+    .map((ingredient) => {
+      const amount = asIngredientLine([
+        ingredient && ingredient.quantity != null ? ingredient.quantity : '',
+        ingredient && ingredient.unit != null ? ingredient.unit : ''
+      ].filter(Boolean).join(' '));
+      return {
+        name: asIngredientLine(ingredient && ingredient.name),
+        amount,
+        qty: ingredient && ingredient.quantity != null ? ingredient.quantity : null,
+        unit: asString(ingredient && ingredient.unit),
+        notes: ''
+      };
+    })
+    .filter((ingredient) => ingredient.name && ingredient.amount);
+}
+
+function extractStepsFromRecipeHtml(recipeHtml) {
+  const html = asString(recipeHtml);
+  const listMatch = html.match(/<h3[^>]*>\s*Method\s*<\/h3>\s*<ol[\s\S]*?>([\s\S]*?)<\/ol>/i);
+  if (listMatch) {
+    const steps = Array.from(listMatch[1].matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi))
+      .map((match) => stripHtml(match[1]))
+      .filter(Boolean);
+    if (steps.length) return steps;
+  }
+
+  const methodHeading = html.search(/<h3[^>]*>\s*Method\s*<\/h3>/i);
+  if (methodHeading >= 0) {
+    const methodBlock = html
+      .slice(methodHeading)
+      .replace(/^<h3[^>]*>\s*Method\s*<\/h3>/i, '');
+    const untilNextHeading = methodBlock.split(/<h3[^>]*>/i)[0];
+    return Array.from(untilNextHeading.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi))
+      .map((match) => stripHtml(match[1]))
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function normalizeStoredRecipeRecord(recipeJson, recipeHtml) {
+  const normalized = normalizeExtractedRecipe(recipeJson);
+  const derivedPortionFields = extractPortionFieldsFromHtml(recipeHtml);
+  const derivedIngredients = extractStructuredIngredientsFromHtml(recipeHtml);
+  const derivedSteps = extractStepsFromRecipeHtml(recipeHtml);
+
+  return {
+    ...normalized,
+    portion: normalized.portion || derivedPortionFields.portion,
+    yield: normalized.yield || (!normalized.portion ? derivedPortionFields.yield : ''),
+    servings: normalized.servings || normalized.yield || normalized.portion || derivedPortionFields.yield || derivedPortionFields.portion,
+    ingredients: normalized.ingredients.length ? normalized.ingredients : derivedIngredients,
+    steps: normalized.steps.length ? normalized.steps : derivedSteps,
+  };
 }
 
 function getRecipeHtmlForIngredientParsing(recipeValue) {
@@ -1444,6 +1533,11 @@ async function handleApplyUpdate() {
       slotKey: patch.dishSlotKey,
       oldDishName: patch.oldDishName || '',
       newDishName,
+      recipeData: normalizeExtractedRecipe({
+        ...patch.recipeData,
+        title: newDishName,
+        generatedHtml: newRecipeHtml,
+      }),
       newRecipeHtml,
     };
     console.log('Apply payload:', JSON.stringify(payload));

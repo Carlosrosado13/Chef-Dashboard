@@ -48,18 +48,28 @@ function validateStoredRecipeEntry(label, recipeValue) {
 }
 
 function validateRecipeDataset(label, data) {
-  assert(isPlainObject(data), `${label} must be an object`);
-  const weekKeys = Object.keys(data).filter((key) => /^\d+$/.test(String(key)));
-  assert(weekKeys.length > 0, `${label} must contain at least one numeric week key`);
+  assert(Array.isArray(data), `${label} must be an array`);
+  assert(data.length > 0, `${label} must contain recipes`);
 
-  weekKeys.forEach((weekKey) => {
-    const weekData = data[weekKey];
-    assert(isPlainObject(weekData), `${label} week ${weekKey} must be an object`);
-    const recipeKeys = Object.keys(weekData);
-    assert(recipeKeys.length > 0, `${label} week ${weekKey} must contain recipe entries`);
-    recipeKeys.forEach((recipeKey) => {
-      validateStoredRecipeEntry(`${label} week ${weekKey} recipe "${recipeKey}"`, weekData[recipeKey]);
-    });
+  data.forEach((record, index) => {
+    assert(isPlainObject(record), `${label}[${index}] must be an object`);
+    assert(String(record.title || '').trim(), `${label}[${index}].title is required`);
+    assert(Number.isFinite(Number(record.week)) && Number(record.week) > 0, `${label}[${index}].week is required`);
+    validateStoredRecipeEntry(`${label}[${index}] "${record.title}"`, record);
+
+    if (Array.isArray(record.ingredients)) {
+      record.ingredients.forEach((ingredient, ingredientIndex) => {
+        assert(isPlainObject(ingredient), `${label}[${index}].ingredients[${ingredientIndex}] must be an object`);
+        assert(String(ingredient.name || '').trim(), `${label}[${index}].ingredients[${ingredientIndex}].name is required`);
+        assert(String(ingredient.amount || '').trim(), `${label}[${index}].ingredients[${ingredientIndex}].amount is required`);
+      });
+    }
+
+    if (Array.isArray(record.steps)) {
+      record.steps.forEach((step, stepIndex) => {
+        assert(String(step || '').trim(), `${label}[${index}].steps[${stepIndex}] must be a non-empty string`);
+      });
+    }
   });
 
   return true;

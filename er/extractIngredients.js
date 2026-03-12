@@ -182,7 +182,7 @@ function loadInventory(aliasLookup) {
 
 function loadDinnerData() {
   const dinnerData = readRecipesJson().dinner;
-  if (!dinnerData || typeof dinnerData !== 'object') {
+  if (!dinnerData || (typeof dinnerData !== 'object' && !Array.isArray(dinnerData))) {
     throw new Error('Could not load dinner recipe data from data/recipes.json');
   }
   return dinnerData;
@@ -190,13 +190,28 @@ function loadDinnerData() {
 
 function loadLunchData() {
   const lunchData = readRecipesJson().lunch;
-  if (!lunchData || typeof lunchData !== 'object') {
+  if (!lunchData || (typeof lunchData !== 'object' && !Array.isArray(lunchData))) {
     throw new Error('Could not load lunch recipe data from data/recipes_lunch.json');
   }
   return lunchData;
 }
 
 function assertWeekLikeData(datasetName, data) {
+  if (Array.isArray(data)) {
+    if (!data.length) {
+      throw new Error(`${datasetName} data is empty`);
+    }
+    const numericWeekKeys = Array.from(new Set(data.map((record) => Number(record && record.week)).filter(Number.isFinite)));
+    if (!numericWeekKeys.length) {
+      throw new Error(`${datasetName} data does not contain numeric week keys`);
+    }
+    const hasRecipeHtml = data.some((record) => typeof (record && record.generatedHtml) === 'string' && record.generatedHtml.includes('<'));
+    if (!hasRecipeHtml) {
+      throw new Error(`${datasetName} has no HTML recipe strings`);
+    }
+    return;
+  }
+
   const keys = Object.keys(data);
   if (!keys.length) {
     throw new Error(`${datasetName} data is empty`);
@@ -326,6 +341,44 @@ function initWeekMaps() {
 
 function collectIngredientsByWeek(dataObject, aliasLookup, categoryLookup, missingCategories) {
   const byWeek = initWeekMaps();
+
+  if (Array.isArray(dataObject)) {
+    for (const record of dataObject) {
+      const weekNum = Number(record && record.week);
+      const recipeHtml = record && typeof record.generatedHtml === 'string' ? record.generatedHtml : '';
+      if (!WEEK_NUMBERS.includes(weekNum) || !recipeHtml) continue;
+
+      const weekMap = byWeek[weekNum];
+      for (const row of extractIngredientRowsFromRecipeHtml(recipeHtml)) {
+        const canonical = canonicalize(row.ingredient, aliasLookup);
+        if (!canonical) continue;
+
+        const category = categoryLookup[canonical] || UNCATEGORIZED;
+        if (category === UNCATEGORIZED) {
+          missingCategories.add(canonical);
+        }
+
+        if (!weekMap.has(canonical)) {
+          weekMap.set(canonical, {
+            ingredient: canonical,
+            category,
+            count: 0,
+            measurements: [],
+          });
+        }
+
+        const entry = weekMap.get(canonical);
+        entry.count += 1;
+        entry.measurements.push({
+          quantity: row.amount.quantity,
+          unit: row.amount.unit,
+          raw: row.amount.raw,
+        });
+      }
+    }
+
+    return byWeek;
+  }
 
   for (const [weekKey, weekRecipes] of Object.entries(dataObject)) {
     const weekNum = Number(weekKey);
