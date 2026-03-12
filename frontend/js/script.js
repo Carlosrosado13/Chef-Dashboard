@@ -1182,7 +1182,10 @@ function getRecipeStoreByMenu(menu) {
 function getApiBaseUrl() {
   const input = document.getElementById('adminApiBase');
   const raw = input ? input.value : '';
-  const normalized = String(raw || '').trim().replace(/\/+$/, '');
+  const normalized = String(raw || '')
+    .trim()
+    .replace(/\/+(extract|apply|admin\/update)$/i, '')
+    .replace(/\/+$/, '');
   return normalized || DEFAULT_API_BASE_URL;
 }
 
@@ -1477,7 +1480,7 @@ async function handleExtractPreview() {
     const response = await fetch(`${apiBase}/extract`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url })
+      body: JSON.stringify({ recipeUrl: url })
     });
     if (!response.ok) {
       const errorText = await response.text();

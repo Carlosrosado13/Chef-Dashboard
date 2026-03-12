@@ -1,7 +1,7 @@
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type,x-admin-secret',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': '*',
 };
 
 const JSON_HEADERS = {
@@ -70,9 +70,10 @@ export default {
 
 async function handleExtract(request) {
   const body = await parseJsonBody(request);
-  const sourceUrl = sanitizeText(body.url || '');
+  console.log('Extract request received:', JSON.stringify(body));
+  const sourceUrl = sanitizeText(body.recipeUrl || body.url || '');
   if (!sourceUrl) {
-    return json({ success: false, ok: false, error: 'url is required' }, 400);
+    return json({ success: false, ok: false, error: 'recipeUrl is required' }, 400);
   }
 
   const response = await fetch(sourceUrl, {
@@ -199,6 +200,15 @@ async function handleApply(request, env) {
   }
 
   const body = await parseJsonBody(request);
+  console.log('Apply request received:', JSON.stringify({
+    menu: body.menu,
+    week: body.week,
+    day: body.day,
+    slotKey: body.slotKey,
+    oldDishName: body.oldDishName,
+    newDishName: body.newDishName,
+    recipeTitle: body?.recipeData?.title,
+  }));
   const menu = sanitizeText(body.menu || '').toLowerCase();
   const week = Number(body.week);
   const day = normalizeDayLabel(body.day || '');
