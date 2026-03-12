@@ -4,9 +4,9 @@ const fs = require('fs');
 const path = require('path');
 const ExcelJS = require('exceljs');
 const { readRecipesJson } = require('./loadRecipesJson');
+const { readIngredientsJson, writeIngredientsJson } = require('./dataStore');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
-const MASTER_INGREDIENTS_JS_PATH = path.join(ROOT_DIR, 'data', 'master_ingredients.js');
 const MASTER_INGREDIENTS_XLSX_PATH = path.join(ROOT_DIR, 'ingredients_master.xlsx');
 
 const RULES = [
@@ -98,28 +98,6 @@ function classifyIngredient(ingredient) {
   return 'Uncategorized';
 }
 
-function escapeForDoubleQuotedJsString(value) {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
-
-function buildMasterIngredientsJs(entries) {
-  const lines = [];
-  lines.push('const masterIngredients = [');
-
-  for (const entry of entries) {
-    const name = escapeForDoubleQuotedJsString(entry.name);
-    const category = escapeForDoubleQuotedJsString(entry.category);
-    lines.push(`  { name: "${name}", category: "${category}" },`);
-  }
-
-  lines.push('];');
-  lines.push('');
-  lines.push('export default masterIngredients;');
-  lines.push('');
-
-  return lines.join('\n');
-}
-
 async function writeExcel(entries) {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('Ingredients');
@@ -137,7 +115,7 @@ async function writeExcel(entries) {
 }
 
 async function main() {
-  const jsOnly = process.argv.includes('--js-only');
+  const jsonOnly = process.argv.includes('--json-only');
   const recipes = readRecipesJson();
   const dinnerData = recipes.dinner;
   const lunchData = recipes.lunch;
@@ -164,17 +142,20 @@ async function main() {
     .sort((a, b) => a.localeCompare(b))
     .map((name) => ({ name, category: classifyIngredient(name) }));
 
-  fs.mkdirSync(path.dirname(MASTER_INGREDIENTS_JS_PATH), { recursive: true });
-  fs.writeFileSync(MASTER_INGREDIENTS_JS_PATH, buildMasterIngredientsJs(entries), 'utf8');
+  const currentIngredients = readIngredientsJson();
+  writeIngredientsJson({
+    ...currentIngredients,
+    masterIngredients: entries,
+  });
 
-  if (!jsOnly) {
+  if (!jsonOnly) {
     await writeExcel(entries);
   }
 
   console.log(`Total extracted: ${extractedIngredients.length}`);
   console.log(`Unique ingredients: ${entries.length}`);
-  console.log(`JS output: ${MASTER_INGREDIENTS_JS_PATH}`);
-  if (!jsOnly) {
+  console.log('JSON output: data/ingredients.json');
+  if (!jsonOnly) {
     console.log(`XLSX output: ${MASTER_INGREDIENTS_XLSX_PATH}`);
   }
 }

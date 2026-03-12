@@ -21,6 +21,10 @@ const lunchCategoryConfig = [
 ];
 
 const bootErrors = [];
+const DINNER_RECIPES_JSON_URL = 'data/recipes.json';
+const LUNCH_RECIPES_JSON_URL = 'data/recipes_lunch.json';
+const MENU_JSON_URL = 'data/menu.json';
+const INGREDIENTS_JSON_URL = 'data/ingredients.json';
 
 function safeParse(jsonText, fallback = null) {
   if (typeof jsonText !== 'string') return fallback;
@@ -95,27 +99,6 @@ function reportBootError(message) {
   console.error(text);
 }
 
-function resolveGlobalValue(...names) {
-  for (let i = 0; i < names.length; i += 1) {
-    const name = names[i];
-    if (Object.prototype.hasOwnProperty.call(globalThis, name) && globalThis[name]) {
-      return globalThis[name];
-    }
-  }
-
-  for (let i = 0; i < names.length; i += 1) {
-    const name = names[i];
-    if (name === 'menuData' && typeof menuData !== 'undefined') return menuData;
-    if (name === 'dinnerMenuData' && typeof dinnerMenuData !== 'undefined') return dinnerMenuData;
-    if (name === 'menuOverviewData' && typeof menuOverviewData !== 'undefined') return menuOverviewData;
-    if (name === 'lunchMenuData' && typeof lunchMenuData !== 'undefined') return lunchMenuData;
-    if (name === 'recipesData' && typeof recipesData !== 'undefined') return recipesData;
-    if (name === 'recipesLunchData' && typeof recipesLunchData !== 'undefined') return recipesLunchData;
-  }
-
-  return undefined;
-}
-
 function hasWeekLikeRecipeData(data) {
   if (!data || typeof data !== 'object') return false;
   const keys = Object.keys(data);
@@ -132,7 +115,7 @@ function hasWeekLikeRecipeData(data) {
 
 function validateRecipeData(label, data) {
   if (!hasWeekLikeRecipeData(data)) {
-    reportBootError(`Recipe data failed to load. Check recipes.js/recipeslunch.js (${label}).`);
+    reportBootError(`Recipe data failed to load (${label}).`);
     return null;
   }
   return data;
@@ -146,27 +129,74 @@ function validateMenuData(label, data) {
   return data;
 }
 
-const ingredientDataStore = resolveGlobalValue('menuData') || { menu: [] };
-const dinnerMenuDataStore = validateMenuData('Dinner Menu', resolveGlobalValue('dinnerMenuData', 'menuOverviewData') || {});
-const lunchMenuDataStore = validateMenuData('Lunch Menu', resolveGlobalValue('lunchMenuData') || {});
+function validateIngredientsData(data) {
+  if (!data || typeof data !== 'object') {
+    reportBootError('Ingredient data failed to load.');
+    return { menu: [], masterIngredients: [] };
+  }
+
+  return {
+    ...data,
+    menu: asArray(data.menu),
+    masterIngredients: asArray(data.masterIngredients),
+  };
+}
+
+function validateMenuPayload(data) {
+  const payload = asObject(data);
+  return {
+    dinner: validateMenuData('Dinner Menu', asObject(payload.dinner)),
+    lunch: validateMenuData('Lunch Menu', asObject(payload.lunch)),
+  };
+}
+
+async function fetchJson(url, label, validator) {
+  try {
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) {
+      reportBootError(`${label} failed to load: HTTP ${response.status}`);
+      return null;
+    }
+
+    const parsed = await response.json();
+    return typeof validator === 'function' ? validator(parsed) : parsed;
+  } catch (error) {
+    reportBootError(`${label} failed to load: ${error.message || String(error)}`);
+    return null;
+  }
+}
+
+async function loadRecipeStores() {
+  const [dinnerRecipes, lunchRecipes, menuPayload, ingredientsPayload] = await Promise.all([
+    fetchJson(DINNER_RECIPES_JSON_URL, 'Dinner recipe data', (value) => validateRecipeData('Dinner Recipes', value)),
+    fetchJson(LUNCH_RECIPES_JSON_URL, 'Lunch recipe data', (value) => validateRecipeData('Lunch Recipes', value)),
+    fetchJson(MENU_JSON_URL, 'Menu data', validateMenuPayload),
+    fetchJson(INGREDIENTS_JSON_URL, 'Ingredient data', validateIngredientsData),
+  ]);
+
+  recipesStore = dinnerRecipes;
+  lunchRecipesStore = lunchRecipes || {};
+  ingredientDataStore = ingredientsPayload || { menu: [], masterIngredients: [] };
+  dinnerMenuDataStore = menuPayload ? menuPayload.dinner : {};
+  lunchMenuDataStore = menuPayload ? menuPayload.lunch : {};
+  mealData.dinner = dinnerMenuDataStore;
+  mealData.lunch = lunchMenuDataStore;
+  globalThis.recipesData = recipesStore;
+  globalThis.recipesLunchData = lunchRecipesStore;
+  globalThis.menuData = ingredientDataStore;
+  globalThis.dinnerMenuData = dinnerMenuDataStore;
+  globalThis.lunchMenuData = lunchMenuDataStore;
+}
+
+let ingredientDataStore = { menu: [], masterIngredients: [] };
+let dinnerMenuDataStore = {};
+let lunchMenuDataStore = {};
 const mealData = {
   dinner: dinnerMenuDataStore,
   lunch: lunchMenuDataStore
 };
-const dinnerRecipesGlobal = resolveGlobalValue('recipesData') || null;
-const lunchRecipesGlobal = resolveGlobalValue('recipesLunchData') || null;
-console.log('recipesData global (window):', window.recipesData ?? null);
-console.log('recipesLunchData global (window):', window.recipesLunchData ?? null);
-console.log('recipesData resolved:', dinnerRecipesGlobal);
-console.log('recipesLunchData resolved:', lunchRecipesGlobal);
-if (!dinnerRecipesGlobal) {
-  console.error('Dinner recipes missing');
-}
-if (!lunchRecipesGlobal) {
-  console.error('Lunch recipes missing');
-}
-const recipesStore = validateRecipeData('Dinner Recipes', dinnerRecipesGlobal);
-const lunchRecipesStore = validateRecipeData('Lunch Recipes', lunchRecipesGlobal) || {};
+let recipesStore = null;
+let lunchRecipesStore = {};
 
 let selectedDish = null;
 let selectedMeal = 'dinner';
@@ -625,7 +655,7 @@ function renderRecipe() {
 
   const store = selectedMeal === 'dinner' ? recipesStore : lunchRecipesStore;
   if (!store || typeof store !== 'object') {
-    recipeDetails.innerHTML = '<p>Recipe data failed to load. Check recipes.js/recipeslunch.js.</p>';
+    recipeDetails.innerHTML = '<p>Recipe data failed to load.</p>';
     return;
   }
   const weekRecipes = store && store[week];
@@ -1653,7 +1683,7 @@ function renderBootErrorsBanner() {
     shell.prepend(banner);
   }
 
-  banner.textContent = `Recipe data failed to load. Check recipes.js/recipeslunch.js. ${bootErrors.join(' | ')}`;
+  banner.textContent = `Recipe data failed to load. ${bootErrors.join(' | ')}`;
 }
 
 function validateRequiredSelectors() {
@@ -1769,9 +1799,13 @@ function init() {
   syncExportWeekWithMainWeek();
 
   try {
-    buildIngredientCheckerData();
-  } catch (error) {
-    console.warn('Failed to build ingredient checker data:', error);
+    validateIngredientCheckerData();
+  } catch (_error) {
+    try {
+      buildIngredientCheckerData();
+    } catch (buildError) {
+      console.warn('Failed to build ingredient checker data:', buildError);
+    }
   }
 
   document.getElementById('updateWeekSelect').value = document.getElementById('weekSelect').value || '1';
@@ -1784,8 +1818,9 @@ function init() {
   switchTab('recipes');
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   try {
+    await loadRecipeStores();
     init();
   } catch (error) {
     console.error(error.message || error);
