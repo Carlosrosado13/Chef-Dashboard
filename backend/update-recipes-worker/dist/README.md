@@ -1,1 +1,0 @@
-This folder contains the built output assets for the worker "chef-dashboard-update-recipes" generated at 2026-03-05T20:12:17.736Z.

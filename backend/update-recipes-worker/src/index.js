@@ -208,6 +208,11 @@ async function handleApply(request, env) {
     }, 400);
   }
 
+  const recipeHtmlValidation = validateIncomingRecipeHtml(newRecipeHtml);
+  if (!recipeHtmlValidation.ok) {
+    return json({ ok: false, error: recipeHtmlValidation.error }, 422);
+  }
+
   const branch = env.GH_BRANCH;
   const menuPath = 'data/menu.json';
   const ingredientsPath = 'data/ingredients.json';
@@ -341,142 +346,6 @@ async function handleApply(request, env) {
   }, 200);
 }
 
-function parseDataScript(scriptText, varName) {
-  // Supports:
-  //  - const menuOverviewData = {...};
-  //  - let/var menuOverviewData = {...};
-  //  - export const menuOverviewData = {...};
-  //  - menuOverviewData = {...};
-  //
-  // It does NOT execute code. It only extracts the object literal and JSON-parses it.
-
-  const startIndex = findObjectAssignmentStart(scriptText, varName);
-
-  if (startIndex === -1) {
-    throw createError(400, `Could not find ${varName} assignment in script`);
-  }
-
-  const endIndex = findMatchingBrace(scriptText, startIndex);
-  if (endIndex === -1) {
-    throw createError(400, `Could not parse ${varName}: unmatched braces`);
-  }
-
-  const objectLiteral = scriptText.slice(startIndex, endIndex + 1);
-
-  // Your menu_overview.js looks JSON-safe already (double quotes everywhere),
-  // so JSON.parse will work.
-  // If later you have trailing commas, you’ll need a sanitizer.
-  let value;
-  try {
-    value = JSON.parse(objectLiteral);
-  } catch (_strictParseErr) {
-    try {
-      const normalizedJson = normalizeJsObjectLiteralToJson(objectLiteral);
-      value = JSON.parse(normalizedJson);
-    } catch (_looseParseErr) {
-      throw createError(
-        400,
-        `Could not parse ${varName}. Supported assignments: const/let/var/export/window/globalThis with JSON-like object literal.`,
-      );
-    }
-  }
-
-  if (!value || typeof value !== 'object') {
-    throw createError(400, `Parsed ${varName} is not an object`);
-  }
-
-  return value;
-}
-
-function findMatchingBrace(text, openBraceIndex) {
-  let depth = 0;
-  let inString = false;
-  let stringQuote = '';
-  let escape = false;
-
-  for (let i = openBraceIndex; i < text.length; i++) {
-    const ch = text[i];
-
-    if (inString) {
-      if (escape) {
-        escape = false;
-        continue;
-      }
-      if (ch === '\\') {
-        escape = true;
-        continue;
-      }
-      if (ch === stringQuote) {
-        inString = false;
-        stringQuote = '';
-      }
-      continue;
-    } else {
-      if (ch === '"' || ch === "'" || ch === '`') {
-        inString = true;
-        stringQuote = ch;
-        continue;
-      }
-      if (ch === '{') depth++;
-      if (ch === '}') {
-        depth--;
-        if (depth === 0) return i;
-      }
-    }
-  }
-  return -1;
-}
-
-function escapeRegExp(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function updateObjectAssignmentInScript(scriptText, varName, value) {
-  const startIndex = findObjectAssignmentStart(scriptText, varName);
-  if (startIndex === -1) {
-    throw createError(400, `Could not find ${varName} assignment in script`);
-  }
-
-  const endIndex = findMatchingBrace(scriptText, startIndex);
-  if (endIndex === -1) {
-    throw createError(400, `Could not parse ${varName}: unmatched braces`);
-  }
-
-  const replacement = JSON.stringify(value, null, 2);
-  return `${scriptText.slice(0, startIndex)}${replacement}${scriptText.slice(endIndex + 1)}`;
-}
-
-function validateScriptSyntax(scriptText, label) {
-  try {
-    new Function(scriptText);
-    return { ok: true };
-  } catch (error) {
-    return { ok: false, error: `Invalid JavaScript for ${label}: ${error.message || String(error)}` };
-  }
-}
-
-function findObjectAssignmentStart(scriptText, varName) {
-  const target = escapeRegExp(varName);
-  const patterns = [
-    new RegExp(`export\\s+const\\s+${target}\\s*=\\s*\\{`, 'm'),
-    new RegExp(`const\\s+${target}\\s*=\\s*\\{`, 'm'),
-    new RegExp(`let\\s+${target}\\s*=\\s*\\{`, 'm'),
-    new RegExp(`var\\s+${target}\\s*=\\s*\\{`, 'm'),
-    new RegExp(`window\\.${target}\\s*=\\s*\\{`, 'm'),
-    new RegExp(`globalThis\\.${target}\\s*=\\s*\\{`, 'm'),
-    new RegExp(`${target}\\s*=\\s*\\{`, 'm'),
-  ];
-
-  for (const re of patterns) {
-    const match = re.exec(scriptText);
-    if (!match) continue;
-    const bracePos = scriptText.indexOf('{', match.index);
-    if (bracePos !== -1) return bracePos;
-  }
-
-  return -1;
-}
-
 function parseRecipeJsonFile(fileText, filePath) {
   let dataObject;
   try {
@@ -567,8 +436,11 @@ function validateRecipeJsonFile(fileText, filePath) {
         if (!html) {
           return { ok: false, error: `${filePath} recipe "${recipeKey}" must be a non-empty HTML string` };
         }
-        if (!/<h2[\s>]/i.test(html) || (!/<h3[^>]*>\s*Ingredients\s*<\/h3>/i.test(html) && !/<table[\s>]/i.test(html))) {
-          return { ok: false, error: `${filePath} recipe "${recipeKey}" is missing required recipe sections` };
+        if (!/<h2[\s>][\s\S]*?<\/h2>/i.test(html)) {
+          return { ok: false, error: `${filePath} recipe "${recipeKey}" must include a recipe title` };
+        }
+        if (!/<table[\s\S]*?<\/table>/i.test(html)) {
+          return { ok: false, error: `${filePath} recipe "${recipeKey}" must include an ingredient table` };
         }
       }
     }
@@ -594,149 +466,6 @@ function validateIngredientsJsonFile(fileText, filePath) {
   } catch (error) {
     return { ok: false, error: error.message || String(error) };
   }
-}
-
-function parseRecipeScript(fileText, menu) {
-  const expectedGlobal = menu === 'dinner' ? 'recipesData' : 'recipesLunchData';
-  const label = menu === 'dinner' ? 'recipes.js' : 'recipeslunch.js';
-  const syntax = validateScriptSyntax(fileText, label);
-  if (!syntax.ok) {
-    throw new Error(syntax.error);
-  }
-
-  const evaluated = evaluateRecipeScript(fileText, label);
-  const dataObject =
-    evaluated.runtime?.window?.[expectedGlobal] ||
-    evaluated.runtime?.globalThis?.[expectedGlobal] ||
-    evaluated.locals?.[expectedGlobal] ||
-    null;
-
-  if (!dataObject || typeof dataObject !== 'object' || Array.isArray(dataObject)) {
-    throw new Error(`${expectedGlobal} is missing or is not an object in ${label}`);
-  }
-
-  return { dataObject };
-}
-
-function evaluateRecipeScript(scriptText, label) {
-  const runtime = { window: {}, globalThis: {}, self: {}, module: { exports: {} }, exports: {} };
-  runtime.globalThis = runtime;
-  runtime.window = runtime;
-  runtime.self = runtime;
-
-  try {
-    const fn = new Function(
-      'window',
-      'globalThis',
-      'self',
-      'module',
-      'exports',
-      `${scriptText}
-return {
-  recipesData: typeof recipesData !== 'undefined' ? recipesData : undefined,
-  recipesLunchData: typeof recipesLunchData !== 'undefined' ? recipesLunchData : undefined,
-};`
-    );
-
-    const locals = fn(runtime, runtime, runtime, runtime.module, runtime.exports) || {};
-    return { runtime, locals };
-  } catch (error) {
-    throw new Error(`Unable to evaluate ${label}: ${error.message || String(error)}`);
-  }
-}
-
-function validateRecipeScript(scriptText, menu) {
-  const expectedGlobal = menu === 'dinner' ? 'recipesData' : 'recipesLunchData';
-  const label = menu === 'dinner' ? 'recipes.js' : 'recipeslunch.js';
-
-  try {
-    const parsed = parseRecipeScript(scriptText, menu);
-    if (!Object.keys(parsed.dataObject || {}).length) {
-      return { ok: false, error: `${expectedGlobal} is empty in ${label}` };
-    }
-    return { ok: true };
-  } catch (error) {
-    return { ok: false, error: error.message || String(error) };
-  }
-}
-
-function normalizeJsObjectLiteralToJson(jsLiteral) {
-  let out = '';
-  let inString = false;
-  let quote = '';
-  let escape = false;
-
-  for (let i = 0; i < jsLiteral.length; i += 1) {
-    const ch = jsLiteral[i];
-
-    if (!inString) {
-      if (ch === '"' || ch === "'" || ch === '`') {
-        inString = true;
-        quote = ch;
-        out += '"';
-        continue;
-      }
-      out += ch;
-      continue;
-    }
-
-    if (escape) {
-      out += jsonEscapeChar(ch);
-      escape = false;
-      continue;
-    }
-
-    if (ch === '\\') {
-      escape = true;
-      continue;
-    }
-
-    if (quote === '`' && ch === '$' && jsLiteral[i + 1] === '{') {
-      throw new Error('Template interpolation is not supported');
-    }
-
-    if (ch === quote) {
-      inString = false;
-      quote = '';
-      out += '"';
-      continue;
-    }
-
-    if (ch === '\n') {
-      out += '\\n';
-      continue;
-    }
-    if (ch === '\r') {
-      out += '\\r';
-      continue;
-    }
-    if (ch === '\t') {
-      out += '\\t';
-      continue;
-    }
-    if (ch === '"') {
-      out += '\\"';
-      continue;
-    }
-
-    out += ch;
-  }
-
-  if (inString || escape) {
-    throw new Error('Unterminated string in object literal');
-  }
-
-  const withoutTrailingCommas = out.replace(/,\s*([}\]])/g, '$1');
-  return withoutTrailingCommas.replace(/([{,]\s*)([A-Za-z_$][A-Za-z0-9_$]*|\d+)\s*:/g, '$1"$2":');
-}
-
-function jsonEscapeChar(ch) {
-  if (ch === '\n') return '\\n';
-  if (ch === '\r') return '\\r';
-  if (ch === '\t') return '\\t';
-  if (ch === '"') return '\\"';
-  if (ch === '\\') return '\\\\';
-  return `\\${ch}`;
 }
 
 function getMenuWeek(menuData, menu, week) {
@@ -834,6 +563,20 @@ function parseIngredientLine(line) {
     .replace(/\s+/g, ' ')
     .trim();
 
+  const match = normalized.match(/^(\d+(?:\.\d+)?(?:\s+\d+\/\d+)?|\d+\/\d+)?\s*([A-Za-z]+)?\s+(.+)$/);
+  if (match) {
+    const qtyText = sanitizeText(match[1] || '');
+    const unit = sanitizeText(match[2] || '');
+    const name = sanitizeText(match[3] || '');
+    const numericQty = qtyText && !/\//.test(qtyText) ? Number(qtyText) : qtyText || null;
+    return {
+      name: name || normalized,
+      qty: numericQty,
+      unit,
+      notes: '',
+    };
+  }
+
   return {
     name: normalized,
     qty: null,
@@ -844,6 +587,7 @@ function parseIngredientLine(line) {
 
 function generateRecipeHtml(recipe) {
   const title = escapeHtml(recipe.title || 'Untitled Recipe');
+  const servings = escapeHtml(sanitizeText(recipe.servings || recipe.yield || ''));
   const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
   const steps = Array.isArray(recipe.steps) ? recipe.steps : [];
 
@@ -852,11 +596,39 @@ function generateRecipeHtml(recipe) {
     const qty = item?.qty == null ? '' : String(item.qty);
     const unit = sanitizeText(item?.unit || '');
     const amount = escapeHtml(`${qty} ${unit}`.trim());
-    return `<tr><td>${name}</td><td>${amount}</td></tr>`;
+    return `<tr><td>${name}</td><td>${amount}</td><td>${amount}</td><td>${amount}</td></tr>`;
   }).join('');
 
   const stepRows = steps.map((step) => `<li><p>${escapeHtml(step)}</p></li>`).join('');
-  return `<h2>${title}</h2><h3>Ingredients</h3><table><thead><tr><th>Ingredient</th><th>Amount</th></tr></thead><tbody>${ingredientRows}</tbody></table><h3>Method</h3><ol type="1">${stepRows}</ol>`;
+  const yieldLine = servings ? `<p><strong>Yield:</strong> ${servings}</p>` : '';
+  return `<h2>${title}</h2>${yieldLine}<h3>Ingredients</h3><table><thead><tr><th>Ingredient</th><th>50</th><th>100</th><th>150</th></tr></thead><tbody>${ingredientRows}</tbody></table><h3>Method</h3><ol type="1">${stepRows}</ol>`;
+}
+
+function validateIncomingRecipeHtml(html) {
+  const text = String(html || '').trim();
+  if (!text) return { ok: false, error: 'Recipe HTML is required.' };
+  if (!/<h2[\s>][\s\S]*?<\/h2>/i.test(text)) {
+    return { ok: false, error: 'Recipe HTML must include a recipe name in an <h2> tag.' };
+  }
+  if (!/(<strong>\s*Yield:\s*<\/strong>|<p>\s*Portion:)/i.test(text)) {
+    return { ok: false, error: 'Recipe HTML must include portion information.' };
+  }
+  if (!/<h3[^>]*>\s*Ingredients\s*<\/h3>/i.test(text)) {
+    return { ok: false, error: 'Recipe HTML must include an Ingredients heading.' };
+  }
+  if (!/<table[\s\S]*?<\/table>/i.test(text)) {
+    return { ok: false, error: 'Recipe HTML must include an ingredient table.' };
+  }
+  if (!/<th[^>]*>\s*50\s*<\/th>/i.test(text) || !/<th[^>]*>\s*100\s*<\/th>/i.test(text) || !/<th[^>]*>\s*150\s*<\/th>/i.test(text)) {
+    return { ok: false, error: 'Recipe HTML must include 50/100/150 scaling quantities.' };
+  }
+  if (!/<tbody[\s\S]*?<tr[\s\S]*?<td[\s\S]*?<\/td>[\s\S]*?<td[\s\S]*?\S[\s\S]*?<\/td>[\s\S]*?<\/tr>[\s\S]*?<\/tbody>/i.test(text)) {
+    return { ok: false, error: 'Recipe HTML must include ingredient quantities.' };
+  }
+  if (!/<h3[^>]*>\s*Method\s*<\/h3>/i.test(text) || !/<ol[\s\S]*?<li[\s\S]*?<\/li>[\s\S]*?<\/ol>/i.test(text)) {
+    return { ok: false, error: 'Recipe HTML must include a preparation method.' };
+  }
+  return { ok: true };
 }
 
 function normalizeStoredRecipeHtml(recipeValue) {

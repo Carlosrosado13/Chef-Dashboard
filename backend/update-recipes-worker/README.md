@@ -53,7 +53,7 @@ Request body:
 
 Behavior:
 - Validates admin secret.
-- Updates exactly one recipe entry in `recipes.js` or `recipeslunch.js`.
+- Updates centralized JSON files only: `data/recipes.json`, `data/recipes_lunch.json`, `data/menu.json`, and `data/ingredients.json`.
 - Validates updated JS contract (`window/globalThis.recipesData` or `recipesLunchData`) before commit.
 - Commits via GitHub API using backend token.
 - Returns commit SHA/URL.

@@ -8,7 +8,8 @@
     "extract:ingredients": "node scripts/extract_all_ingredients_to_excel.js",
     "validate:recipes": "node scripts/validateRecipesData.js",
     "smoke:recipes": "node scripts/smokeRecipesLoad.js",
-    "apply:recipe-patch": "node scripts/applyRecipePatch.js"
+    "apply:recipe-patch": "node scripts/applyRecipePatch.js",
+    "verify:repo": "npm run validate:recipes && npm run smoke:recipes"
   },
   "devDependencies": {
     "@playwright/test": "^1.54.2",
@@ -19,7 +20,7 @@
     "xlsx": "^0.18.5"
   },
   "description": "",
-  "main": "data.js",
+  "main": "frontend/js/script.js",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Carlosrosado13/Chef-Dashboard.git"

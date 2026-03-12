@@ -2,12 +2,10 @@
 
 const fs = require('fs');
 const path = require('path');
-const vm = require('vm');
 const ExcelJS = require('exceljs');
+const { readRecipesJson } = require('../scripts/loadRecipesJson');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
-const DINNER_FILE = path.join(ROOT_DIR, 'recipes.js');
-const LUNCH_FILE = path.join(ROOT_DIR, 'recipeslunch.js');
 const CATEGORY_FILE = path.join(ROOT_DIR, 'data', 'ingredient_categories.json');
 const ALIAS_FILE = path.join(ROOT_DIR, 'data', 'ingredient_aliases.json');
 const INVENTORY_FILE = path.join(ROOT_DIR, 'data', 'inventory.json');
@@ -182,43 +180,18 @@ function loadInventory(aliasLookup) {
   return inventory;
 }
 
-function evaluateFileIntoSandbox(filePath, sandbox) {
-  let source = fs.readFileSync(filePath, 'utf8');
-  source = source.replace(/^\uFEFF/, '');
-  source = source.replace(/\bexport\s+const\s+/g, 'const ');
-  source = source.replace(/\bexport\s+default\s+/g, '');
-  vm.runInContext(source, sandbox, { filename: path.basename(filePath) });
-}
-
-function buildRuntimeSandbox() {
-  const runtime = { module: { exports: {} }, exports: {} };
-  runtime.globalThis = runtime;
-  runtime.window = runtime;
-  runtime.self = runtime;
-  return vm.createContext(runtime);
-}
-
 function loadDinnerData() {
-  const sandbox = buildRuntimeSandbox();
-  evaluateFileIntoSandbox(DINNER_FILE, sandbox);
-
-  const dinnerData = sandbox.recipesData;
+  const dinnerData = readRecipesJson().dinner;
   if (!dinnerData || typeof dinnerData !== 'object') {
-    throw new Error('Could not find dinner data on globalThis.recipesData from recipes.js');
+    throw new Error('Could not load dinner recipe data from data/recipes.json');
   }
   return dinnerData;
 }
 
 function loadLunchData() {
-  const sandbox = buildRuntimeSandbox();
-  evaluateFileIntoSandbox(LUNCH_FILE, sandbox);
-
-  const fromModule = sandbox.module && sandbox.module.exports && sandbox.module.exports.recipesLunchData;
-  const fromGlobal = sandbox.recipesLunchData;
-  const lunchData = fromModule || fromGlobal;
-
+  const lunchData = readRecipesJson().lunch;
   if (!lunchData || typeof lunchData !== 'object') {
-    throw new Error('Could not find lunch data via module.exports.recipesLunchData or globalThis.recipesLunchData from recipeslunch.js');
+    throw new Error('Could not load lunch recipe data from data/recipes_lunch.json');
   }
   return lunchData;
 }

@@ -1,28 +1,16 @@
 #!/usr/bin/env node
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
 
-function loadScriptIntoContext(ctx, relativePath) {
-  const fullPath = path.resolve(__dirname, '..', relativePath);
-  const code = fs.readFileSync(fullPath, 'utf8');
-  vm.runInContext(code, ctx, { filename: relativePath });
-}
+const { readMenuJson, readRecipesJson } = require('./dataStore');
 
 function normalizeTitle(value) {
   return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
-const context = vm.createContext({ console, globalThis: {} });
-
-loadScriptIntoContext(context, 'menu_overview.js');
-loadScriptIntoContext(context, 'dinner_menu_data.js');
-loadScriptIntoContext(context, 'lunch_menu_data.js');
-loadScriptIntoContext(context, 'recipeslunch.js');
-
-const lunchMenuData = context.globalThis.lunchMenuData;
-const lunchRecipes = context.globalThis.recipesLunchData;
-const dinnerMenuData = context.globalThis.dinnerMenuData;
+const menu = readMenuJson();
+const recipes = readRecipesJson();
+const lunchMenuData = menu.lunch || {};
+const lunchRecipes = recipes.lunch || {};
+const dinnerMenuData = menu.dinner || {};
 
 const weekKey = '2';
 const weekMenuKey = 'Week 2';
@@ -36,15 +24,8 @@ for (const day of days) {
   if (!recipeWeek) errors.push(`Missing lunch recipes for week ${weekKey}.`);
   if (!menuDay || !recipeWeek) continue;
 
-  const expected = {
-    SOUP: menuDay['SOUP'],
-    SALAD: menuDay['SALAD'],
-    'MAIN 1': menuDay['MAIN 1'],
-    'MAIN 2': menuDay['MAIN 2'],
-    DESSERT: menuDay['DESSERT']
-  };
-
-  for (const [slot, menuTitle] of Object.entries(expected)) {
+  for (const slot of ['SOUP', 'SALAD', 'MAIN 1', 'MAIN 2', 'DESSERT']) {
+    const menuTitle = menuDay[slot];
     if (!menuTitle) continue;
     const recipeHtml = recipeWeek[menuTitle];
     if (!recipeHtml) {
@@ -81,7 +62,7 @@ if (duplicateCrossMealTitles.length) {
 
 if (errors.length) {
   console.error('Validation failed:');
-  errors.forEach((e) => console.error(`- ${e}`));
+  errors.forEach((error) => console.error(`- ${error}`));
   process.exit(1);
 }
 

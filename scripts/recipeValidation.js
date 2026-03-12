@@ -17,14 +17,34 @@ function normalizeStoredRecipeHtml(recipeValue) {
   return '';
 }
 
+function hasRecipeTitle(html) {
+  return /<h2[\s>][\s\S]*?<\/h2>/i.test(html);
+}
+
+function hasPortionInfo(html) {
+  return /<(p|div|span)[^>]*>\s*(yield|portion)\s*:/i.test(html);
+}
+
+function hasIngredientTable(html) {
+  return /<table[\s>][\s\S]*?<\/table>/i.test(html);
+}
+
+function hasScalingQuantities(html) {
+  return /<th[^>]*>\s*50\s*<\/th>/i.test(html) &&
+    /<th[^>]*>\s*100\s*<\/th>/i.test(html) &&
+    /<th[^>]*>\s*150\s*<\/th>/i.test(html);
+}
+
+function hasMethodSection(html) {
+  return /<h3[^>]*>\s*Method\s*<\/h3>/i.test(html) &&
+    (/<ol[\s>][\s\S]*?<li[\s>]/i.test(html) || /<p[^>]*>\s*[^<]+<\/p>/i.test(html));
+}
+
 function validateStoredRecipeEntry(label, recipeValue) {
   const html = normalizeStoredRecipeHtml(recipeValue);
   assert(html, `${label} must be a non-empty recipe HTML string or object with generatedHtml`);
-  assert(/<h2[\s>]/i.test(html), `${label} is missing an <h2> title`);
-  assert(
-    /<h3[^>]*>\s*Ingredients\s*<\/h3>/i.test(html) || /<table[\s>]/i.test(html),
-    `${label} is missing ingredient content`,
-  );
+  assert(hasRecipeTitle(html), `${label} is missing an <h2> title`);
+  assert(hasIngredientTable(html), `${label} is missing an ingredient table`);
 }
 
 function validateRecipeDataset(label, data) {
@@ -67,7 +87,9 @@ function normalizePatchIngredient(ingredient) {
 function validateRecipePatchData(recipeData) {
   assert(isPlainObject(recipeData), 'recipeData must be an object');
   const title = String(recipeData.title || '').trim();
+  const servings = String(recipeData.servings || recipeData.yield || '').trim();
   assert(title, 'recipeData.title is required');
+  assert(servings, 'recipeData.servings is required');
 
   const ingredients = Array.isArray(recipeData.ingredients) ? recipeData.ingredients.map(normalizePatchIngredient) : [];
   const steps = Array.isArray(recipeData.steps)
@@ -75,11 +97,15 @@ function validateRecipePatchData(recipeData) {
     : [];
 
   assert(ingredients.length > 0, 'recipeData.ingredients must contain at least one ingredient');
+  assert(
+    ingredients.some((item) => item.qty != null || item.unit),
+    'recipeData.ingredients must include quantity or unit values',
+  );
   assert(steps.length > 0, 'recipeData.steps must contain at least one step');
 
   return {
     title,
-    servings: String(recipeData.servings || recipeData.yield || '').trim(),
+    servings,
     sourceUrl: String(recipeData.sourceUrl || '').trim(),
     generatedHtml: String(recipeData.generatedHtml || '').trim(),
     ingredients,
@@ -88,6 +114,11 @@ function validateRecipePatchData(recipeData) {
 }
 
 module.exports = {
+  hasIngredientTable,
+  hasMethodSection,
+  hasPortionInfo,
+  hasRecipeTitle,
+  hasScalingQuantities,
   isPlainObject,
   normalizeStoredRecipeHtml,
   validateRecipeDataset,

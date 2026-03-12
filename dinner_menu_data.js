@@ -1,10 +1,16 @@
-const dinnerMenuData = JSON.parse(JSON.stringify(globalThis.menuOverviewData || {}));
+// Compatibility shim. Source of truth now lives in data/menu.json.
+let dinnerMenuData = globalThis.dinnerMenuData || globalThis.menuOverviewData || {};
 
-if (dinnerMenuData['4'] && dinnerMenuData['4'].Friday) {
-  dinnerMenuData['4'].Friday['Appetizer 1'] = 'Corn Chowder';
-  dinnerMenuData['4'].Friday.Elevated = 'Crab Cakes';
-  dinnerMenuData['4'].Friday.Traditional = 'Beef Pastrami Sandwich';
-  dinnerMenuData['4'].Friday.Dessert = 'Chocolate Layer Cake';
+if (typeof module !== 'undefined' && module.exports) {
+  const fs = require('fs');
+  const path = require('path');
+  const menuData = JSON.parse(
+    fs.readFileSync(path.join(__dirname, 'data', 'menu.json'), 'utf8').replace(/^\uFEFF/, '')
+  );
+  dinnerMenuData = menuData.dinner || {};
+  module.exports = { dinnerMenuData };
 }
 
-globalThis.dinnerMenuData = dinnerMenuData;
+if (typeof globalThis !== 'undefined') {
+  globalThis.dinnerMenuData = dinnerMenuData;
+}

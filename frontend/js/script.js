@@ -1116,7 +1116,10 @@ function buildGeneratedRecipeHtml(recipeJson) {
   const ingredientRows = ingredients
     .map(item => ingredientToDisplay(normalizeIngredientItem(item)))
     .filter(display => display.name)
-    .map(display => `<tr><td>${escapeHtml(display.name)}</td><td>${escapeHtml(display.amount)}</td></tr>`)
+    .map((display) => {
+      const amount = escapeHtml(display.amount);
+      return `<tr><td>${escapeHtml(display.name)}</td><td>${amount}</td><td>${amount}</td><td>${amount}</td></tr>`;
+    })
     .join('');
   const noIngredientsWarning = ingredientRows ? '' : '<p class="no-ingredients-warning">No ingredients found for this recipe.</p>';
 
@@ -1124,7 +1127,7 @@ function buildGeneratedRecipeHtml(recipeJson) {
     .map(step => `<li><p>${escapeHtml(String(step))}</p></li>`)
     .join('');
 
-  return `<h2>${title}</h2>${yieldLine}<h3>Ingredients</h3><table><thead><tr><th>Ingredient</th><th>Amount</th></tr></thead><tbody>${ingredientRows}</tbody></table>${noIngredientsWarning}<h3>Method</h3><ol type="1">${stepRows}</ol>`;
+  return `<h2>${title}</h2>${yieldLine}<h3>Ingredients</h3><table><thead><tr><th>Ingredient</th><th>50</th><th>100</th><th>150</th></tr></thead><tbody>${ingredientRows}</tbody></table>${noIngredientsWarning}<h3>Method</h3><ol type="1">${stepRows}</ol>`;
 }
 
 function isValidExtractedRecipe(recipeJson) {
@@ -1133,8 +1136,17 @@ function isValidExtractedRecipe(recipeJson) {
     normalizedRecipe &&
     typeof normalizedRecipe === 'object' &&
     typeof normalizedRecipe.title === 'string' &&
+    Boolean(normalizedRecipe.title.trim()) &&
+    typeof normalizedRecipe.servings === 'string' &&
+    Boolean(normalizedRecipe.servings.trim()) &&
     Array.isArray(normalizedRecipe.ingredients) &&
-    Array.isArray(normalizedRecipe.steps)
+    normalizedRecipe.ingredients.length > 0 &&
+    normalizedRecipe.ingredients.some(item => {
+      const normalized = normalizeIngredientItem(item);
+      return Boolean(normalized.name) && (normalized.qty != null || Boolean(normalized.unit));
+    }) &&
+    Array.isArray(normalizedRecipe.steps) &&
+    normalizedRecipe.steps.length > 0
   );
 }
 
@@ -1173,7 +1185,7 @@ function buildRecipePatchPayload() {
     throw new Error('Run Extract & Preview first.');
   }
   if (!isValidExtractedRecipe(extractedRecipeDraft)) {
-    throw new Error('Extracted recipe is malformed. Need title, ingredients[], and steps[].');
+    throw new Error('Extracted recipe is malformed. Need title, portion/yield, ingredient amounts, and steps.');
   }
   const normalizedDraft = normalizeExtractedRecipe(extractedRecipeDraft);
   const derivedOldDishName = deriveOldDishNameFromOption(selected);
@@ -1371,7 +1383,7 @@ async function handleExtractPreview() {
     const recipePayload = extractResponse && extractResponse.extractedRecipe ? extractResponse.extractedRecipe : extractResponse;
     const recipeJson = normalizeExtractedRecipe(recipePayload);
     if (!isValidExtractedRecipe(recipeJson)) {
-      throw new Error('Backend returned malformed recipe JSON (title/ingredients/steps required).');
+      throw new Error('Backend returned malformed recipe JSON (title, portion/yield, ingredient amounts, and steps required).');
     }
     extractedRecipeDraft = recipeJson;
     renderExtractPreview(recipeJson);
