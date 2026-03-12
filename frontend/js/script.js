@@ -1399,7 +1399,9 @@ function renderExtractPreview(recipeJson) {
   const generatedEl = document.getElementById('previewGenerated');
   if (!titleEl || !ingredientsEl || !stepsEl || !generatedEl) return;
 
-  titleEl.innerHTML = `<h4>${escapeHtml(normalizedRecipe.title || 'Untitled')}</h4>`;
+  const portionOrYield = normalizedRecipe.portion || normalizedRecipe.yield || normalizedRecipe.servings;
+  const portionLabel = normalizedRecipe.portion ? 'Portion' : 'Yield';
+  titleEl.innerHTML = `<h4>${escapeHtml(normalizedRecipe.title || 'Untitled')}</h4>${portionOrYield ? `<p><strong>${portionLabel}:</strong> ${escapeHtml(portionOrYield)}</p>` : ''}`;
 
   const ingredients = normalizedRecipe.ingredients;
   const ingredientItems = ingredients
@@ -1483,10 +1485,12 @@ async function handleExtractPreview() {
     }
     const extractResponse = await response.json();
     console.log('Extract response:', extractResponse);
-    if (extractResponse && extractResponse.ok === false) {
+    if (extractResponse && (extractResponse.ok === false || extractResponse.success === false)) {
       throw new Error(extractResponse.error || 'Extract failed');
     }
-    const recipePayload = extractResponse && extractResponse.extractedRecipe ? extractResponse.extractedRecipe : extractResponse;
+    const recipePayload = extractResponse && (extractResponse.recipe || extractResponse.extractedRecipe)
+      ? (extractResponse.recipe || extractResponse.extractedRecipe)
+      : extractResponse;
     const recipeJson = normalizeExtractedRecipe(recipePayload);
     if (!isValidExtractedRecipe(recipeJson)) {
       throw new Error('Backend returned malformed recipe JSON (title, portion/yield, ingredient amounts, and steps required).');
@@ -1574,7 +1578,7 @@ async function handleApplyUpdate() {
       throw new Error(`HTTP ${res.status}: ${backendError}`);
     }
 
-    if (!data || data.ok !== true) {
+    if (!data || (data.ok !== true && data.success !== true)) {
       throw new Error(data?.error || rawText || 'Unknown error (no body)');
     }
 

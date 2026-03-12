@@ -40,6 +40,7 @@ export default {
     try {
       if (request.method === 'GET' && url.pathname === '/') {
         return json({
+          success: true,
           ok: true,
           build: BUILD,
           endpoints: ['GET /', 'POST /extract', 'POST /apply', 'POST /admin/update'],
@@ -58,11 +59,11 @@ export default {
         return await handleApply(request, env);
       }
 
-      return json({ ok: false, error: 'Endpoint not found', path: url.pathname }, 404);
+      return json({ success: false, ok: false, error: 'Endpoint not found', path: url.pathname }, 404);
     } catch (error) {
       const status = Number(error?.status) || 500;
       const details = error?.details || null;
-      return json({ ok: false, error: error?.message || String(error), details }, status);
+      return json({ success: false, ok: false, error: error?.message || String(error), details }, status);
     }
   },
 };
@@ -71,7 +72,7 @@ async function handleExtract(request) {
   const body = await parseJsonBody(request);
   const sourceUrl = sanitizeText(body.url || '');
   if (!sourceUrl) {
-    return json({ ok: false, error: 'url is required' }, 400);
+    return json({ success: false, ok: false, error: 'url is required' }, 400);
   }
 
   const response = await fetch(sourceUrl, {
@@ -80,20 +81,21 @@ async function handleExtract(request) {
   });
 
   if (!response.ok) {
-    return json({ ok: false, error: `Failed to fetch source URL (${response.status})` }, 400);
+    return json({ success: false, ok: false, error: `Failed to fetch source URL (${response.status})` }, 400);
   }
 
   const html = await response.text();
   const recipeNode = extractPrimaryRecipeFromJsonLd(html);
-  if (!recipeNode) {
-    return json({ ok: false, error: 'No Recipe JSON-LD found at URL.' }, 422);
-  }
-
   const ingredients = extractIngredientStrings(html, recipeNode).map((line) => parseIngredientLine(line)).filter(Boolean);
-  const steps = normalizeRecipeInstructions(recipeNode.recipeInstructions);
+  const steps = recipeNode
+    ? normalizeRecipeInstructions(recipeNode.recipeInstructions)
+    : extractInstructionStrings(html);
+  const extractedYield = recipeNode
+    ? normalizeServings(recipeNode.recipeYield)
+    : extractYieldOrPortionFromHtml(html);
   const extractedRecipe = normalizeExtractedRecipePayload({
-    title: sanitizeText(recipeNode.name || extractTitleFromHtml(html) || 'Untitled Recipe'),
-    yield: normalizeServings(recipeNode.recipeYield),
+    title: sanitizeText((recipeNode && recipeNode.name) || extractRecipeTitle(html) || 'Untitled Recipe'),
+    yield: extractedYield,
     ingredients,
     steps,
     sourceUrl,
@@ -101,18 +103,21 @@ async function handleExtract(request) {
 
   const extractedValidation = validateExtractedRecipePayload(extractedRecipe);
   if (!extractedValidation.ok) {
-    return json({ ok: false, error: extractedValidation.error }, 422);
+    return json({ success: false, ok: false, error: extractedValidation.error }, 422);
   }
 
-  extractedRecipe.generatedHtml = generateRecipeHtml(extractedRecipe);
+  const normalizedRecipe = {
+    ...extractedValidation.recipe,
+    generatedHtml: generateRecipeHtml(extractedValidation.recipe),
+  };
 
-  return json({ ok: true, extractedRecipe }, 200);
+  return json({ success: true, ok: true, recipe: normalizedRecipe, extractedRecipe: normalizedRecipe }, 200);
 }
 
 async function handleAdminUpdate(request, env) {
   const providedSecret = request.headers.get('x-admin-secret') || '';
   if (providedSecret !== ADMIN_SECRET) {
-    return json({ ok: false, error: 'Unauthorized: invalid x-admin-secret.' }, 401);
+    return json({ success: false, ok: false, error: 'Unauthorized: invalid x-admin-secret.' }, 401);
   }
 
   const body = await parseJsonBody(request);
@@ -125,7 +130,7 @@ async function handleAdminUpdate(request, env) {
 
   const updates = Array.isArray(body.updates) ? body.updates : [];
   if (!updates.length) {
-    return json({ ok: false, error: 'Body must include updates: [{ path, content }, ...]' }, 400);
+    return json({ success: false, ok: false, error: 'Body must include updates: [{ path, content }, ...]' }, 400);
   }
 
   const owner = env.GH_OWNER;
@@ -140,13 +145,13 @@ async function handleAdminUpdate(request, env) {
     const content = typeof update.content === 'string' ? update.content : null;
 
     if (!path) {
-      return json({ ok: false, error: `updates[${i}].path must be a non-empty string` }, 400);
+      return json({ success: false, ok: false, error: `updates[${i}].path must be a non-empty string` }, 400);
     }
     if (content == null) {
-      return json({ ok: false, error: `updates[${i}].content must be a string` }, 400);
+      return json({ success: false, ok: false, error: `updates[${i}].content must be a string` }, 400);
     }
     if (!ALLOWED_UPDATE_PATHS.has(path)) {
-      return json({ ok: false, error: `updates[${i}].path must target centralized JSON files only` }, 400);
+      return json({ success: false, ok: false, error: `updates[${i}].path must target centralized JSON files only` }, 400);
     }
 
     const commitMessage = messagePrefix || `Update ${path}`;
@@ -161,17 +166,17 @@ async function handleAdminUpdate(request, env) {
     results.push(result);
   }
 
-  return json({ ok: true, updates: results }, 200);
+  return json({ success: true, ok: true, updates: results }, 200);
 }
 
 async function handleApply(request, env) {
   if (!env.ADMIN_SECRET) {
-    return json({ ok: false, error: 'Server misconfigured: ADMIN_SECRET is missing.' }, 500);
+    return json({ success: false, ok: false, error: 'Server misconfigured: ADMIN_SECRET is missing.' }, 500);
   }
 
   const providedSecret = request.headers.get('x-admin-secret') || '';
   if (providedSecret !== env.ADMIN_SECRET) {
-    return json({ ok: false, error: 'Unauthorized: invalid x-admin-secret.' }, 401);
+    return json({ success: false, ok: false, error: 'Unauthorized: invalid x-admin-secret.' }, 401);
   }
 
   const missingEnv = [];
@@ -181,6 +186,7 @@ async function handleApply(request, env) {
   if (!env.GH_BRANCH) missingEnv.push('GH_BRANCH');
   if (missingEnv.length) {
     return json({
+      success: false,
       ok: false,
       error: `Server misconfigured: missing ${missingEnv.join(', ')}`,
     }, 500);
@@ -206,6 +212,7 @@ async function handleApply(request, env) {
   if (!recipeData.title) missing.push('recipeData.title');
   if (missing.length) {
     return json({
+      success: false,
       ok: false,
       error: `Invalid request. Missing/invalid: ${missing.join(', ')}`,
     }, 400);
@@ -219,7 +226,7 @@ async function handleApply(request, env) {
   });
   const recipeValidation = validateExtractedRecipePayload(normalizedRecipe);
   if (!recipeValidation.ok) {
-    return json({ ok: false, error: recipeValidation.error }, 422);
+    return json({ success: false, ok: false, error: recipeValidation.error }, 422);
   }
   const finalRecipeHtml = newRecipeHtml || generateRecipeHtml(recipeValidation.recipe);
 
@@ -245,19 +252,19 @@ async function handleApply(request, env) {
 
   const weekMenuData = getMenuWeek(menuData, menu, week);
   if (!weekMenuData) {
-    return json({ ok: false, error: `Week ${week} not found in ${menuPath}` }, 400);
+    return json({ success: false, ok: false, error: `Week ${week} not found in ${menuPath}` }, 400);
   }
   const dayKey = findKeyCaseInsensitive(weekMenuData, day);
   if (!dayKey) {
-    return json({ ok: false, error: `Day "${day}" not found in ${menuPath}` }, 400);
+    return json({ success: false, ok: false, error: `Day "${day}" not found in ${menuPath}` }, 400);
   }
   const dayMenu = weekMenuData[dayKey];
   if (!dayMenu || typeof dayMenu !== 'object') {
-    return json({ ok: false, error: `Day "${day}" has invalid structure in ${menuPath}` }, 400);
+    return json({ success: false, ok: false, error: `Day "${day}" has invalid structure in ${menuPath}` }, 400);
   }
   const resolvedSlotKey = findKeyCaseInsensitive(dayMenu, slotKey);
   if (!resolvedSlotKey) {
-    return json({ ok: false, error: `Slot "${slotKey}" not found in ${menuPath}` }, 400);
+    return json({ success: false, ok: false, error: `Slot "${slotKey}" not found in ${menuPath}` }, 400);
   }
 
   const menuDishBefore = sanitizeText(dayMenu[resolvedSlotKey] || '');
@@ -291,22 +298,24 @@ async function handleApply(request, env) {
   const ingredientsScript = serializeIngredientsJsonFile(nextIngredientsData);
   const recipeFileValidation = validateRecipeJsonFile(recipeScript, recipePath);
   if (!recipeFileValidation.ok) {
-    return json({ ok: false, error: recipeFileValidation.error }, 422);
+    return json({ success: false, ok: false, error: recipeFileValidation.error }, 422);
   }
   const menuValidation = validateMenuJsonFile(menuScript, menuPath);
   if (!menuValidation.ok) {
-    return json({ ok: false, error: menuValidation.error }, 422);
+    return json({ success: false, ok: false, error: menuValidation.error }, 422);
   }
   const ingredientsValidation = validateIngredientsJsonFile(ingredientsScript, ingredientsPath);
   if (!ingredientsValidation.ok) {
-    return json({ ok: false, error: ingredientsValidation.error }, 422);
+    return json({ success: false, ok: false, error: ingredientsValidation.error }, 422);
   }
   const isDryRun = new URL(request.url).searchParams.get('dryRun') === 'true';
 
   if (isDryRun) {
     return json({
+      success: true,
       ok: true,
       dryRun: true,
+      recipe: nextRecipeRecord,
       menuPath,
       recipePath,
       menuUpdate: {
@@ -351,8 +360,10 @@ async function handleApply(request, env) {
   });
 
   return json({
+    success: true,
     ok: true,
     status: 'updated',
+    recipe: nextRecipeRecord,
     menuPath,
     recipePath,
     ingredientsPath,
@@ -937,9 +948,83 @@ function extractIngredientStrings(html, recipeNode) {
   return uniqueStrings(values);
 }
 
-function extractTitleFromHtml(html) {
-  const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  return match ? sanitizeText(match[1]) : '';
+function extractRecipeTitle(html) {
+  const candidates = [
+    /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["'][^>]*>/i,
+    /<h1[^>]*>([\s\S]*?)<\/h1>/i,
+    /<title[^>]*>([\s\S]*?)<\/title>/i,
+  ];
+
+  for (let index = 0; index < candidates.length; index += 1) {
+    const match = html.match(candidates[index]);
+    const title = sanitizeText(match ? match[1] : '');
+    if (title) return title;
+  }
+
+  return '';
+}
+
+function extractYieldOrPortionFromHtml(html) {
+  const metaMatch = html.match(/<meta[^>]+(?:itemprop|name|property)=["'](?:recipeYield|yield|servings?)["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+  const metaValue = sanitizeText(metaMatch ? metaMatch[1] : '');
+  if (metaValue) return metaValue;
+
+  const text = sanitizeText(html);
+  const patterns = [
+    /\b(?:yield|makes?|serves?|servings?)\s*:?\s*([^.|\n\r]{1,80})/i,
+    /\bportion\s*:?\s*([^.|\n\r]{1,80})/i,
+  ];
+
+  for (let index = 0; index < patterns.length; index += 1) {
+    const match = text.match(patterns[index]);
+    const value = sanitizeText(match ? match[1] : '');
+    if (value) return value;
+  }
+
+  return '';
+}
+
+function extractInstructionStrings(html) {
+  const values = [];
+  const containerPatterns = [
+    /<[^>]*class=["'][^"']*recipe-instructions[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/gi,
+    /<[^>]*class=["'][^"']*instructions[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/gi,
+    /<[^>]*class=["'][^"']*method[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/gi,
+  ];
+
+  containerPatterns.forEach((containerPattern) => {
+    let blockMatch;
+    while ((blockMatch = containerPattern.exec(html)) !== null) {
+      const block = blockMatch[1] || '';
+      Array.from(block.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi)).forEach((li) => {
+        const text = sanitizeText(li[1] || '');
+        if (text) values.push(text);
+      });
+      Array.from(block.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)).forEach((paragraph) => {
+        const text = sanitizeText(paragraph[1] || '');
+        if (text) values.push(text);
+      });
+    }
+  });
+
+  if (values.length) return uniqueStrings(values);
+
+  const methodHeadingMatch = html.match(/<h[1-6][^>]*>\s*(Method|Directions|Instructions|Preparation)\s*<\/h[1-6]>([\s\S]{0,3000})/i);
+  if (methodHeadingMatch) {
+    const block = methodHeadingMatch[2] || '';
+    const beforeNextHeading = block.split(/<h[1-6][^>]*>/i)[0];
+    const listItems = Array.from(beforeNextHeading.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi))
+      .map((match) => sanitizeText(match[1] || ''))
+      .filter(Boolean);
+    if (listItems.length) return uniqueStrings(listItems);
+
+    const paragraphs = Array.from(beforeNextHeading.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi))
+      .map((match) => sanitizeText(match[1] || ''))
+      .filter(Boolean);
+    if (paragraphs.length) return uniqueStrings(paragraphs);
+  }
+
+  return [];
 }
 
 function uniqueStrings(values) {
