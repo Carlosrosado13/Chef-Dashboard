@@ -373,8 +373,9 @@ function ingredientToDisplay(ing) {
   const name = (ing.name || '').trim();
   const qty = ing.qty ?? '';
   const unit = (ing.unit || '').trim();
+  const rawAmount = (ing.amount || '').trim();
   const notes = (ing.notes || '').trim();
-  const amount = [qty, unit].filter(Boolean).join(' ').trim();
+  const amount = rawAmount || [qty, unit].filter(Boolean).join(' ').trim();
   if (name) return { name: notes ? `${name} (${notes})` : name, amount };
   if (original) return { name: original, amount: '' };
   return { name: '', amount: '' };
@@ -398,8 +399,10 @@ function stringifyIngredientValue(value) {
 function normalizeIngredientItem(value) {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     const fallback = asIngredientLine(value);
+    const amount = value.amount == null ? '' : String(value.amount);
     return {
       name: stringifyIngredientValue(value.name) || fallback,
+      amount: amount.trim(),
       qty: value.qty == null ? null : value.qty,
       unit: value.unit == null ? '' : String(value.unit),
       notes: value.notes == null ? '' : String(value.notes),
@@ -408,6 +411,7 @@ function normalizeIngredientItem(value) {
 
   return {
     name: stringifyIngredientValue(value),
+    amount: '',
     qty: null,
     unit: '',
     notes: '',
@@ -422,7 +426,15 @@ function normalizeExtractedRecipe(recipeJson) {
   return {
     ...source,
     title: source.title == null ? '' : String(source.title),
-    servings: source.servings == null ? (source.yield == null ? '' : String(source.yield)) : String(source.servings),
+    portion: source.portion == null ? '' : String(source.portion),
+    yield:
+      source.yield == null
+        ? (source.portion == null ? (source.servings == null ? '' : String(source.servings)) : '')
+        : String(source.yield),
+    servings:
+      source.servings == null
+        ? (source.yield == null ? (source.portion == null ? '' : String(source.portion)) : String(source.yield))
+        : String(source.servings),
     ingredients: ingredientsRaw
       .map(normalizeIngredientItem)
       .filter((item) => item && asIngredientLine(item.name)),
@@ -1109,7 +1121,9 @@ function updateDishId(menu, week, day, slot) {
 function buildGeneratedRecipeHtml(recipeJson) {
   const normalizedRecipe = normalizeExtractedRecipe(recipeJson);
   const title = escapeHtml(normalizedRecipe.title || 'Untitled Recipe');
-  const yieldLine = normalizedRecipe.servings ? `<p><strong>Yield:</strong> ${escapeHtml(normalizedRecipe.servings)}</p>` : '';
+  const portionOrYield = normalizedRecipe.portion || normalizedRecipe.yield || normalizedRecipe.servings;
+  const label = normalizedRecipe.portion ? 'Portion' : 'Yield';
+  const yieldLine = portionOrYield ? `<p><strong>${label}:</strong> ${escapeHtml(portionOrYield)}</p>` : '';
   const ingredients = normalizedRecipe.ingredients;
   const steps = normalizedRecipe.steps;
 
@@ -1137,16 +1151,18 @@ function isValidExtractedRecipe(recipeJson) {
     typeof normalizedRecipe === 'object' &&
     typeof normalizedRecipe.title === 'string' &&
     Boolean(normalizedRecipe.title.trim()) &&
-    typeof normalizedRecipe.servings === 'string' &&
-    Boolean(normalizedRecipe.servings.trim()) &&
+    ((typeof normalizedRecipe.portion === 'string' && Boolean(normalizedRecipe.portion.trim())) ||
+      (typeof normalizedRecipe.yield === 'string' && Boolean(normalizedRecipe.yield.trim())) ||
+      (typeof normalizedRecipe.servings === 'string' && Boolean(normalizedRecipe.servings.trim()))) &&
     Array.isArray(normalizedRecipe.ingredients) &&
     normalizedRecipe.ingredients.length > 0 &&
-    normalizedRecipe.ingredients.some(item => {
+    normalizedRecipe.ingredients.every(item => {
       const normalized = normalizeIngredientItem(item);
-      return Boolean(normalized.name) && (normalized.qty != null || Boolean(normalized.unit));
+      const display = ingredientToDisplay(normalized);
+      return Boolean(normalized.name) && Boolean(display.amount);
     }) &&
     Array.isArray(normalizedRecipe.steps) &&
-    normalizedRecipe.steps.length > 0
+    normalizedRecipe.steps.filter(step => String(step || '').trim()).length > 0
   );
 }
 
@@ -1204,8 +1220,9 @@ function buildRecipePatchPayload() {
     oldRecipeKey,
     recipeData: {
       title: normalizedDraft.title || '',
+      portion: normalizedDraft.portion || '',
       servings: normalizedDraft.servings || '',
-      yield: normalizedDraft.servings || '',
+      yield: normalizedDraft.yield || normalizedDraft.servings || '',
       ingredients: normalizedDraft.ingredients || [],
       steps: normalizedDraft.steps || [],
       sourceUrl: normalizedDraft.sourceUrl || document.getElementById('recipeUrlInput').value.trim(),

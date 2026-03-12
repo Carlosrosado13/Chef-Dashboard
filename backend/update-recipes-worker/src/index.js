@@ -91,17 +91,19 @@ async function handleExtract(request) {
 
   const ingredients = extractIngredientStrings(html, recipeNode).map((line) => parseIngredientLine(line)).filter(Boolean);
   const steps = normalizeRecipeInstructions(recipeNode.recipeInstructions);
-  if (!ingredients.length || !steps.length) {
-    return json({ ok: false, error: 'Could not extract ingredients/steps from the URL.' }, 422);
-  }
-
-  const extractedRecipe = {
+  const extractedRecipe = normalizeExtractedRecipePayload({
     title: sanitizeText(recipeNode.name || extractTitleFromHtml(html) || 'Untitled Recipe'),
-    servings: normalizeServings(recipeNode.recipeYield),
+    yield: normalizeServings(recipeNode.recipeYield),
     ingredients,
     steps,
     sourceUrl,
-  };
+  });
+
+  const extractedValidation = validateExtractedRecipePayload(extractedRecipe);
+  if (!extractedValidation.ok) {
+    return json({ ok: false, error: extractedValidation.error }, 422);
+  }
+
   extractedRecipe.generatedHtml = generateRecipeHtml(extractedRecipe);
 
   return json({ ok: true, extractedRecipe }, 200);
@@ -546,6 +548,72 @@ function normalizeServings(value) {
   return sanitizeText(value || '');
 }
 
+function normalizeExtractedRecipePayload(recipe) {
+  const source = recipe && typeof recipe === 'object' ? recipe : {};
+  const portion = sanitizeText(source.portion || '');
+  const yieldValue = sanitizeText(source.yield || (!portion ? source.servings || '' : ''));
+  const ingredients = Array.isArray(source.ingredients)
+    ? source.ingredients
+      .map((item) => normalizeExtractedIngredient(item))
+      .filter((item) => item && item.name)
+    : [];
+  const steps = Array.isArray(source.steps)
+    ? source.steps.map((step) => sanitizeText(step)).filter(Boolean)
+    : [];
+
+  return {
+    title: sanitizeText(source.title || ''),
+    portion,
+    yield: yieldValue,
+    servings: yieldValue || portion,
+    ingredients,
+    steps,
+    sourceUrl: sanitizeText(source.sourceUrl || ''),
+  };
+}
+
+function normalizeExtractedIngredient(ingredient) {
+  if (!ingredient || typeof ingredient !== 'object') return null;
+
+  const name = sanitizeText(ingredient.name || ingredient.original || '');
+  const qty = ingredient.qty == null || ingredient.qty === '' ? null : ingredient.qty;
+  const unit = sanitizeText(ingredient.unit || '');
+  const amount = sanitizeText(ingredient.amount || formatIngredientAmount(qty, unit));
+
+  return {
+    name,
+    amount,
+    qty,
+    unit,
+  };
+}
+
+function formatIngredientAmount(qty, unit) {
+  return sanitizeText([qty == null ? '' : String(qty), unit || ''].filter(Boolean).join(' '));
+}
+
+function validateExtractedRecipePayload(recipe) {
+  const normalized = normalizeExtractedRecipePayload(recipe);
+
+  if (!normalized.title) {
+    return { ok: false, error: 'Extracted recipe is missing a title.' };
+  }
+  if (!normalized.portion && !normalized.yield) {
+    return { ok: false, error: 'Extracted recipe must include portion or yield information.' };
+  }
+  if (!normalized.ingredients.length) {
+    return { ok: false, error: 'Extracted recipe must include at least one ingredient.' };
+  }
+  if (!normalized.ingredients.every((item) => item.name && item.amount)) {
+    return { ok: false, error: 'Extracted recipe ingredients must include a name and amount.' };
+  }
+  if (!normalized.steps.length) {
+    return { ok: false, error: 'Extracted recipe must include preparation steps.' };
+  }
+
+  return { ok: true, recipe: normalized };
+}
+
 function parseIngredientLine(line) {
   const original = sanitizeText(line || '');
   if (!original) return null;
@@ -563,44 +631,54 @@ function parseIngredientLine(line) {
     .replace(/\s+/g, ' ')
     .trim();
 
+  const textualMatch = normalized.match(/^((?:to taste|a pinch of|pinch of|pinch|a dash of|dash of|dash|about\s+[\w./-]+(?:\s+\w+)?|approx(?:imately)?\s+[\w./-]+(?:\s+\w+)?))\s+(.+)$/i);
+  if (textualMatch) {
+    const amount = sanitizeText(textualMatch[1] || '');
+    const name = sanitizeText(textualMatch[2] || '');
+    if (amount && name) {
+      return {
+        name,
+        amount,
+        qty: null,
+        unit: '',
+      };
+    }
+  }
+
   const match = normalized.match(/^(\d+(?:\.\d+)?(?:\s+\d+\/\d+)?|\d+\/\d+)?\s*([A-Za-z]+)?\s+(.+)$/);
   if (match) {
     const qtyText = sanitizeText(match[1] || '');
     const unit = sanitizeText(match[2] || '');
     const name = sanitizeText(match[3] || '');
     const numericQty = qtyText && !/\//.test(qtyText) ? Number(qtyText) : qtyText || null;
+    const amount = formatIngredientAmount(qtyText || numericQty, unit);
     return {
       name: name || normalized,
+      amount,
       qty: numericQty,
       unit,
-      notes: '',
     };
   }
 
-  return {
-    name: normalized,
-    qty: null,
-    unit: '',
-    notes: '',
-  };
+  return null;
 }
 
 function generateRecipeHtml(recipe) {
-  const title = escapeHtml(recipe.title || 'Untitled Recipe');
-  const servings = escapeHtml(sanitizeText(recipe.servings || recipe.yield || ''));
-  const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
-  const steps = Array.isArray(recipe.steps) ? recipe.steps : [];
+  const normalized = normalizeExtractedRecipePayload(recipe);
+  const title = escapeHtml(normalized.title || 'Untitled Recipe');
+  const portionOrYield = normalized.portion || normalized.yield || normalized.servings;
+  const portionLabel = normalized.portion ? 'Portion' : 'Yield';
+  const ingredients = Array.isArray(normalized.ingredients) ? normalized.ingredients : [];
+  const steps = Array.isArray(normalized.steps) ? normalized.steps : [];
 
   const ingredientRows = ingredients.map((item) => {
     const name = escapeHtml(sanitizeText(item?.name || item || ''));
-    const qty = item?.qty == null ? '' : String(item.qty);
-    const unit = sanitizeText(item?.unit || '');
-    const amount = escapeHtml(`${qty} ${unit}`.trim());
+    const amount = escapeHtml(sanitizeText(item?.amount || formatIngredientAmount(item?.qty, item?.unit)));
     return `<tr><td>${name}</td><td>${amount}</td><td>${amount}</td><td>${amount}</td></tr>`;
   }).join('');
 
   const stepRows = steps.map((step) => `<li><p>${escapeHtml(step)}</p></li>`).join('');
-  const yieldLine = servings ? `<p><strong>Yield:</strong> ${servings}</p>` : '';
+  const yieldLine = portionOrYield ? `<p><strong>${portionLabel}:</strong> ${escapeHtml(portionOrYield)}</p>` : '';
   return `<h2>${title}</h2>${yieldLine}<h3>Ingredients</h3><table><thead><tr><th>Ingredient</th><th>50</th><th>100</th><th>150</th></tr></thead><tbody>${ingredientRows}</tbody></table><h3>Method</h3><ol type="1">${stepRows}</ol>`;
 }
 

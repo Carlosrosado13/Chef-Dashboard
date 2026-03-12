@@ -60,8 +60,9 @@ function ingredientToLine(ingredient) {
   if (!name) return '';
   const qty = ingredient.qty == null ? '' : String(ingredient.qty).trim();
   const unit = String(ingredient.unit || '').trim();
+  const explicitAmount = String(ingredient.amount || '').trim();
   const notes = String(ingredient.notes || '').trim();
-  const amount = [qty, unit].filter(Boolean).join(' ').trim();
+  const amount = explicitAmount || [qty, unit].filter(Boolean).join(' ').trim();
   const line = amount ? `${amount} ${name}` : name;
   return notes ? `${line} (${notes})` : line;
 }
@@ -71,9 +72,12 @@ function normalizeRecipeData(recipeData) {
 
   return {
     title: validated.title,
+    portion: validated.portion,
+    yield: validated.yield,
     servings: validated.servings,
     sourceUrl: validated.sourceUrl,
     generatedHtml: validated.generatedHtml,
+    structuredIngredients: validated.ingredients,
     ingredients: validated.ingredients.map(ingredientToLine).map((line) => line.trim()).filter(Boolean),
     steps: validated.steps,
   };
@@ -117,15 +121,22 @@ function buildRecipeHtml(recipeData) {
   if (recipeData.generatedHtml) return recipeData.generatedHtml;
 
   const title = escapeHtml(recipeData.title);
-  const yieldRow = recipeData.servings ? `<p><strong>Yield:</strong> ${escapeHtml(recipeData.servings)}</p>` : '';
-  const ingredientRows = recipeData.ingredients
-    .map((line) => `<tr><td>${escapeHtml(line)}</td><td></td></tr>`)
+  const portionOrYield = recipeData.portion || recipeData.yield || recipeData.servings;
+  const label = recipeData.portion ? 'Portion' : 'Yield';
+  const yieldRow = portionOrYield ? `<p><strong>${label}:</strong> ${escapeHtml(portionOrYield)}</p>` : '';
+  const structuredIngredients = Array.isArray(recipeData.structuredIngredients) ? recipeData.structuredIngredients : [];
+  const ingredientRows = structuredIngredients
+    .map((ingredient) => {
+      const amount = escapeHtml(String(ingredient.amount || '').trim());
+      const name = escapeHtml(String(ingredient.name || '').trim());
+      return `<tr><td>${name}</td><td>${amount}</td><td>${amount}</td><td>${amount}</td></tr>`;
+    })
     .join('');
   const stepRows = recipeData.steps
     .map((step) => `<li><p>${escapeHtml(step)}</p></li>`)
     .join('');
 
-  return `<h2>${title}</h2>${yieldRow}<h3>Ingredients</h3><table><thead><tr><th>Ingredient</th><th>Amount</th></tr></thead><tbody>${ingredientRows}</tbody></table><h3>Method</h3><ol type="1">${stepRows}</ol>`;
+  return `<h2>${title}</h2>${yieldRow}<h3>Ingredients</h3><table><thead><tr><th>Ingredient</th><th>50</th><th>100</th><th>150</th></tr></thead><tbody>${ingredientRows}</tbody></table><h3>Method</h3><ol type="1">${stepRows}</ol>`;
 }
 
 function normalizeRecipeKey(value) {

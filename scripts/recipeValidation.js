@@ -69,17 +69,23 @@ function normalizePatchIngredient(ingredient) {
   if (typeof ingredient === 'string') {
     const name = ingredient.trim();
     assert(name, 'recipeData.ingredients must not contain blank strings');
-    return { name, qty: null, unit: '', notes: '' };
+    return { name, amount: '', qty: null, unit: '', notes: '' };
   }
 
   assert(isPlainObject(ingredient), 'recipeData.ingredients entries must be strings or objects');
   const name = String(ingredient.name || ingredient.original || '').trim();
   assert(name, 'recipeData.ingredients entries must include a name');
+  const amount = String(ingredient.amount || '').trim();
+  const qty = ingredient.qty == null || ingredient.qty === '' ? null : ingredient.qty;
+  const unit = String(ingredient.unit || '').trim();
+  const normalizedAmount = amount || [qty, unit].filter(Boolean).join(' ').trim();
+  assert(normalizedAmount, 'recipeData.ingredients entries must include an amount');
 
   return {
     name,
-    qty: ingredient.qty == null || ingredient.qty === '' ? null : ingredient.qty,
-    unit: String(ingredient.unit || '').trim(),
+    amount: normalizedAmount,
+    qty,
+    unit,
     notes: String(ingredient.notes || '').trim(),
   };
 }
@@ -87,9 +93,10 @@ function normalizePatchIngredient(ingredient) {
 function validateRecipePatchData(recipeData) {
   assert(isPlainObject(recipeData), 'recipeData must be an object');
   const title = String(recipeData.title || '').trim();
-  const servings = String(recipeData.servings || recipeData.yield || '').trim();
+  const portion = String(recipeData.portion || '').trim();
+  const yieldValue = String(recipeData.yield || recipeData.servings || '').trim();
   assert(title, 'recipeData.title is required');
-  assert(servings, 'recipeData.servings is required');
+  assert(portion || yieldValue, 'recipeData.portion or recipeData.yield is required');
 
   const ingredients = Array.isArray(recipeData.ingredients) ? recipeData.ingredients.map(normalizePatchIngredient) : [];
   const steps = Array.isArray(recipeData.steps)
@@ -97,15 +104,14 @@ function validateRecipePatchData(recipeData) {
     : [];
 
   assert(ingredients.length > 0, 'recipeData.ingredients must contain at least one ingredient');
-  assert(
-    ingredients.some((item) => item.qty != null || item.unit),
-    'recipeData.ingredients must include quantity or unit values',
-  );
+  assert(ingredients.every((item) => String(item.amount || '').trim()), 'recipeData.ingredients must include amounts');
   assert(steps.length > 0, 'recipeData.steps must contain at least one step');
 
   return {
     title,
-    servings,
+    portion,
+    yield: yieldValue,
+    servings: yieldValue || portion,
     sourceUrl: String(recipeData.sourceUrl || '').trim(),
     generatedHtml: String(recipeData.generatedHtml || '').trim(),
     ingredients,
