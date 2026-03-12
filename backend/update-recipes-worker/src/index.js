@@ -103,6 +103,11 @@ async function handleExtract(request) {
 
   const extractedValidation = validateExtractedRecipePayload(extractedRecipe);
   if (!extractedValidation.ok) {
+    console.log('Extract validation failed:', JSON.stringify({
+      url: sourceUrl,
+      extractedRecipe,
+      error: extractedValidation.error,
+    }));
     return json({ success: false, ok: false, error: extractedValidation.error }, 422);
   }
 
@@ -110,6 +115,7 @@ async function handleExtract(request) {
     ...extractedValidation.recipe,
     generatedHtml: generateRecipeHtml(extractedValidation.recipe),
   };
+  console.log('Extract response recipe:', JSON.stringify(normalizedRecipe));
 
   return json({ success: true, ok: true, recipe: normalizedRecipe, extractedRecipe: normalizedRecipe }, 200);
 }
